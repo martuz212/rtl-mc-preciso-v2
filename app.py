@@ -206,86 +206,95 @@ if puntos_file and lineas_file:
     st.dataframe(pd.DataFrame(info))
 
 
-    # =====================================================
-    # RTL FINAL
-    # =====================================================
+# =====================================================
+# RTL FINAL
+# =====================================================
 
-    salida = "LINDEROS TÉCNICOS\n\n"
-    orden = df_p["PUNTO"].tolist()
+salida = "LINDEROS TÉCNICOS\n\n"
+orden = df_p["PUNTO"].tolist()
 
-    card_actual = None
+card_actual = None
 
-    for b in bloques:
+# ✅ contador de linderos (AGREGADO)
+contador_lindero = 1
 
-        card = b[0]["CARD"]
+for b in bloques:
 
-        if card != card_actual:
-            salida += f"POR EL {card}:\n\n"
-            card_actual = card
+    card = b[0]["CARD"]
 
-        p_ini = b[0]["INI"]
-        p_fin = b[-1]["FIN"]
+    if card != card_actual:
+        salida += f"POR EL {card}:\n\n"
+        card_actual = card
 
-        sen,cos = 0,0
-        for t in b:
-            ang_rad = math.radians(t["ANGULO"])
-            sen += math.sin(ang_rad)
-            cos += math.cos(ang_rad)
+    # ✅ 👉 AQUÍ SE AGREGA EL LINDERO (ÚNICO CAMBIO)
+    salida += f"Lindero {contador_lindero}:\n"
 
-        ang = math.degrees(math.atan2(sen, cos)) % 360
-        sentido = clasificar_sentido(ang)
+    p_ini = b[0]["INI"]
+    p_fin = b[-1]["FIN"]
 
-        i1 = orden.index(p_ini)
-        i2 = orden.index(p_fin)
+    sen,cos = 0,0
+    for t in b:
+        ang_rad = math.radians(t["ANGULO"])
+        sen += math.sin(ang_rad)
+        cos += math.cos(ang_rad)
 
-        ruta = orden[i1:i2] if i2>i1 else orden[i1:]+orden[:i2]
-        inter = orden[i1+1:i2] if i2>i1 else orden[i1+1:]+orden[:i2]
+    ang = math.degrees(math.atan2(sen, cos)) % 360
+    sentido = clasificar_sentido(ang)
 
-        tipo = "recta" if len(inter)==0 else "quebrada"
+    i1 = orden.index(p_ini)
+    i2 = orden.index(p_fin)
 
-        texto_int=""
-        if len(inter)>0:
-            texto_int="pasando por los puntos de coordenadas "
-            for p in inter:
-                N,E = coords[p]
-                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-            texto_int = texto_int.rstrip(", ") + ", "
+    ruta = orden[i1:i2] if i2>i1 else orden[i1:]+orden[:i2]
+    inter = orden[i1+1:i2] if i2>i1 else orden[i1+1:]+orden[:i2]
 
-        dist = f(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta))
+    tipo = "recta" if len(inter)==0 else "quebrada"
 
-        N_ini,E_ini = coords[p_ini]
-        N_fin,E_fin = coords[p_fin]
+    texto_int=""
+    if len(inter)>0:
+        texto_int="pasando por los puntos de coordenadas "
+        for p in inter:
+            N,E = coords[p]
+            texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+        texto_int = texto_int.rstrip(", ") + ", "
 
-        texto = (
-            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
-            f"en línea {tipo}, en sentido {sentido}, {texto_int}"
-            f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} "
-            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
-        )
+    dist = f(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta))
 
-        fila = b[-1]
+    N_ini,E_ini = coords[p_ini]
+    N_fin,E_fin = coords[p_fin]
 
-        col = str(fila["COL"]).strip()
+    texto = (
+        f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
+        f"en línea {tipo}, en sentido {sentido}, {texto_int}"
+        f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} "
+        f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
+    )
 
-        if col.upper() == "SIN INFORMACION":
-            texto += "; colinda con un elemento sin información definida"
+    fila = b[-1]
 
-        elif any(x in col.lower() for x in ["rio", "río", "quebrada", "caño"]):
-            texto += f"; colinda con el {col}"
+    col = str(fila["COL"]).strip()
 
-        elif "carretera" in col.lower() or "via" in col.lower():
-            texto += f"; colinda con la {col}"
+    if col.upper() == "SIN INFORMACION":
+        texto += "; colinda con un elemento sin información definida"
 
-        else:
-            texto += f"; colinda con {col}"        
+    elif any(x in col.lower() for x in ["rio", "río", "quebrada", "caño"]):
+        texto += f"; colinda con el {col}"
 
-        if str(fila["COND"]).upper()=="TRASLAPA":
-            texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
-        elif str(fila["COND"]).upper()=="CORRESPONDE":
-            texto += f", que corresponde con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
-        else:
-            texto += "."
+    elif "carretera" in col.lower() or "via" in col.lower():
+        texto += f"; colinda con la {col}"
 
-        salida += texto + "\n\n"
+    else:
+        texto += f"; colinda con {col}"        
 
-    st.text_area("📄 RTL FINAL", salida, height=600)
+    if str(fila["COND"]).upper()=="TRASLAPA":
+        texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
+    elif str(fila["COND"]).upper()=="CORRESPONDE":
+        texto += f", que corresponde con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
+    else:
+        texto += "."
+
+    salida += texto + "\n\n"
+
+    # ✅ aumentar contador (AGREGADO)
+    contador_lindero += 1
+
+st.text_area("📄 RTL FINAL", salida, height=600)
