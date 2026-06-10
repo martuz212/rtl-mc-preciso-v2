@@ -16,9 +16,8 @@ def cargar_archivo(file):
     else:
         return pd.read_csv(file, dtype=str)
 
-# ✅ 🔥 AHORA CON 2 DECIMALES
 def f(v):
-    return f"{v:.2f}".replace(".", ",")
+    return f"{v:.1f}".replace(".", ",")
 
 def clasificar_sentido(ang):
     if ang < 22.5:
@@ -80,12 +79,13 @@ if puntos_file and lineas_file:
     coords = {r["PUNTO"]:(r["NORTE"],r["ESTE"]) for _,r in df_p.iterrows()}
 
     # =====================================================
-    # VISUALIZACIÓN
+    # 🔥 VISUALIZACIÓN DEL POLÍGONO
     # =====================================================
 
     st.markdown("### 🗺️ Visualización del polígono")
 
-    x,y = [],[]
+    x = []
+    y = []
 
     for p in puntos:
         N,E = coords[p]
@@ -98,8 +98,12 @@ if puntos_file and lineas_file:
     fig, ax = plt.subplots()
     ax.plot(x, y, marker='o')
 
-    for i,p in enumerate(puntos):
+    for i, p in enumerate(puntos):
         ax.text(x[i], y[i], p)
+
+    ax.set_title("Polígono del predio")
+    ax.set_xlabel("ESTE")
+    ax.set_ylabel("NORTE")
 
     st.pyplot(fig)
 
@@ -145,7 +149,7 @@ if puntos_file and lineas_file:
     df_tramos = pd.DataFrame(tramos)
 
     # =====================================================
-    # QUIEBRES
+    # QUIEBRES REALES
     # =====================================================
 
     bloques = []
@@ -173,6 +177,26 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
+    # TABLAS
+    # =====================================================
+
+    st.subheader("📐 Tramos técnicos")
+    st.dataframe(df_tramos)
+
+    info = []
+    for i,b in enumerate(bloques,1):
+        info.append({
+            "LINDERO":i,
+            "INI":b[0]["INI"],
+            "FIN":b[-1]["FIN"],
+            "CARD":b[0]["CARD"],
+            "COL":b[0]["COL"]
+        })
+
+    st.subheader("📊 Linderos agrupados")
+    st.dataframe(pd.DataFrame(info))
+
+    # =====================================================
     # RTL FINAL
     # =====================================================
 
@@ -192,7 +216,10 @@ if puntos_file and lineas_file:
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
-        sen,cos = 0,0
+        # 🔥 SENTIDO PROMEDIO
+        sen = 0
+        cos = 0
+
         for t in b:
             ang_rad = math.radians(t["ANGULO"])
             sen += math.sin(ang_rad)
@@ -209,7 +236,7 @@ if puntos_file and lineas_file:
 
         tipo = "recta" if len(inter)==0 else "quebrada"
 
-        texto_int=""
+        texto_int = ""
         if len(inter)>0:
             texto_int="pasando por los puntos de coordenadas "
             for p in inter:
