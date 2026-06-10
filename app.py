@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import math
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="RTL–MC PRECISO PRO", layout="wide")
 st.title("🧭 RTL–MC PRECISO PRO")
@@ -78,6 +79,35 @@ if puntos_file and lineas_file:
     coords = {r["PUNTO"]:(r["NORTE"],r["ESTE"]) for _,r in df_p.iterrows()}
 
     # =====================================================
+    # 🔥 VISUALIZACIÓN DEL POLÍGONO
+    # =====================================================
+
+    st.markdown("### 🗺️ Visualización del polígono")
+
+    x = []
+    y = []
+
+    for p in puntos:
+        N,E = coords[p]
+        x.append(E)
+        y.append(N)
+
+    x.append(x[0])
+    y.append(y[0])
+
+    fig, ax = plt.subplots()
+    ax.plot(x, y, marker='o')
+
+    for i, p in enumerate(puntos):
+        ax.text(x[i], y[i], p)
+
+    ax.set_title("Polígono del predio")
+    ax.set_xlabel("ESTE")
+    ax.set_ylabel("NORTE")
+
+    st.pyplot(fig)
+
+    # =====================================================
     # TRAMOS
     # =====================================================
 
@@ -137,7 +167,7 @@ if puntos_file and lineas_file:
         if (
             t["CARD"]==u["CARD"] and
             t["COL"]==u["COL"] and
-            delta < 30   # 🔥 quiebre real
+            delta < 30
         ):
             actual.append(t)
         else:
@@ -147,10 +177,10 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
-    # TABLAS DE VALIDACIÓN
+    # TABLAS
     # =====================================================
 
-    st.subheader("📐 Tramos técnicos completos")
+    st.subheader("📐 Tramos técnicos")
     st.dataframe(df_tramos)
 
     info = []
@@ -167,7 +197,7 @@ if puntos_file and lineas_file:
     st.dataframe(pd.DataFrame(info))
 
     # =====================================================
-    # RTL FINAL (CON SENTIDO CORREGIDO)
+    # RTL FINAL
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
@@ -186,14 +216,16 @@ if puntos_file and lineas_file:
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
-        # ✅ SENTIDO GLOBAL
-        N1,E1 = coords[p_ini]
-        N2,E2 = coords[p_fin]
+        # 🔥 SENTIDO PROMEDIO
+        sen = 0
+        cos = 0
 
-        dx = E2 - E1
-        dy = N2 - N1
+        for t in b:
+            ang_rad = math.radians(t["ANGULO"])
+            sen += math.sin(ang_rad)
+            cos += math.cos(ang_rad)
 
-        ang = math.degrees(math.atan2(dx, dy)) % 360
+        ang = math.degrees(math.atan2(sen, cos)) % 360
         sentido = clasificar_sentido(ang)
 
         i1 = orden.index(p_ini)
@@ -204,8 +236,7 @@ if puntos_file and lineas_file:
 
         tipo = "recta" if len(inter)==0 else "quebrada"
 
-        # Intermedios
-        texto_int=""
+        texto_int = ""
         if len(inter)>0:
             texto_int="pasando por los puntos de coordenadas "
             for p in inter:
