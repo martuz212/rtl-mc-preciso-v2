@@ -18,6 +18,26 @@ def cargar_archivo(file):
 def f(v):
     return f"{v:.1f}".replace(".", ",")
 
+def clasificar_sentido(ang):
+    if ang < 22.5:
+        return "norte"
+    elif ang < 67.5:
+        return "noreste"
+    elif ang < 112.5:
+        return "este"
+    elif ang < 157.5:
+        return "sureste"
+    elif ang < 202.5:
+        return "sur"
+    elif ang < 247.5:
+        return "suroeste"
+    elif ang < 292.5:
+        return "oeste"
+    elif ang < 337.5:
+        return "noroeste"
+    else:
+        return "norte"
+
 # =========================================================
 # CARGA
 # =========================================================
@@ -25,19 +45,21 @@ def f(v):
 puntos_file = st.file_uploader("📌 Tabla de puntos", type=["xlsx", "csv"])
 lineas_file = st.file_uploader("📐 Tabla de líneas", type=["xlsx", "csv"])
 
+# =========================================================
+# PROCESO
+# =========================================================
+
 if puntos_file and lineas_file:
 
     df_p = cargar_archivo(puntos_file)
     df_l = cargar_archivo(lineas_file)
 
     cons = st.selectbox("🔍 CONSECUTIVO", df_p["CONSECUTIVO"].unique())
+
     df_p = df_p[df_p["CONSECUTIVO"] == cons]
     df_l = df_l[df_l["CONSECUTIVO"] == cons]
 
-    # =====================================================
-    # LIMPIEZA
-    # =====================================================
-
+    # ---------------- LIMPIEZA ----------------
     df_p["ORDEN"] = df_p["ORDEN"].astype(int)
     df_p = df_p.sort_values("ORDEN")
 
@@ -50,7 +72,6 @@ if puntos_file and lineas_file:
 
     df_l["LONGITUD"] = df_l["LONGITUD"].str.replace(",", ".").astype(float)
     df_l["COL"] = df_l["NOM_COLINDANTE"].str.strip()
-    df_l["COND"] = df_l["OBSERVACIONES"].str.strip()
 
     puntos = df_p["PUNTO"].tolist()
 
@@ -75,46 +96,48 @@ if puntos_file and lineas_file:
 
         ang = math.degrees(math.atan2(dx, dy)) % 360
 
-        dist = round(math.sqrt((N2-N1)**2 + (E2-E1)**2),1)
-
-        fila = df_l.iloc[i]
+        dist_calc = round(math.sqrt((N2-N1)**2 + (E2-E1)**2),1)
+        dist_tab = df_l.iloc[i]["LONGITUD"]
+        dif = round(abs(dist_calc - dist_tab),1)
 
         tramos.append({
             "INI":p1,
             "FIN":p2,
             "ANGULO":ang,
-            "DIST":dist,
-            "CARD":fila["CARDINALDIAD"],
-            "COL":fila["COL"],
-            "COND":fila["COND"],
-            "NPN":fila["NPN_COLINDANTE"],
-            "FMI":fila["FMI_COLINDANTE"],
-            "TIT":fila["NOMBRE_PREDIO_COL"]
+            "DIST_CALC":dist_calc,
+            "DIST_TAB":dist_tab,
+            "DIF":dif,
+            "ESTADO":"✅ OK" if dif==0 else "❌ ERROR",
+            "CARD":df_l.iloc[i]["CARDINALDIAD"],
+            "COL":df_l.iloc[i]["COL"],
+            "COND":df_l.iloc[i]["OBSERVACIONES"],
+            "NPN":df_l.iloc[i]["NPN_COLINDANTE"],
+            "FMI":df_l.iloc[i]["FMI_COLINDANTE"],
+            "TIT":df_l.iloc[i]["NOMBRE_PREDIO_COL"]
         })
 
     df_tramos = pd.DataFrame(tramos)
 
     # =====================================================
-    # DETECCIÓN DE QUIEBRES REALES
+    # QUIEBRES REALES
     # =====================================================
 
     bloques = []
     actual = [df_tramos.iloc[0]]
 
-    for i in range(1, len(df_tramos)):
+    for i in range(1,len(df_tramos)):
 
         t = df_tramos.iloc[i]
         u = actual[-1]
 
         delta = abs(t["ANGULO"] - u["ANGULO"])
-
         if delta > 180:
             delta = 360 - delta
 
         if (
-            t["CARD"] == u["CARD"] and
-            t["COL"] == u["COL"] and
-            delta < 30   # 🔥 criterio de quiebre real
+            t["CARD"]==u["CARD"] and
+            t["COL"]==u["COL"] and
+            delta < 30   # 🔥 quiebre real
         ):
             actual.append(t)
         else:
@@ -127,25 +150,24 @@ if puntos_file and lineas_file:
     # TABLAS DE VALIDACIÓN
     # =====================================================
 
-    st.subheader("📐 Tramos técnicos")
+    st.subheader("📐 Tramos técnicos completos")
     st.dataframe(df_tramos)
 
     info = []
-
-    for i, b in enumerate(bloques,1):
+    for i,b in enumerate(bloques,1):
         info.append({
             "LINDERO":i,
             "INI":b[0]["INI"],
             "FIN":b[-1]["FIN"],
-            "COL":b[0]["COL"],
-            "CARD":b[0]["CARD"]
+            "CARD":b[0]["CARD"],
+            "COL":b[0]["COL"]
         })
 
     st.subheader("📊 Linderos agrupados")
     st.dataframe(pd.DataFrame(info))
 
     # =====================================================
-    # RTL NARRATIVO
+    # RTL FINAL (CON SENTIDO CORREGIDO)
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
@@ -164,46 +186,52 @@ if puntos_file and lineas_file:
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
+        # ✅ SENTIDO GLOBAL
+        N1,E1 = coords[p_ini]
+        N2,E2 = coords[p_fin]
+
+        dx = E2 - E1
+        dy = N2 - N1
+
+        ang = math.degrees(math.atan2(dx, dy)) % 360
+        sentido = clasificar_sentido(ang)
+
         i1 = orden.index(p_ini)
         i2 = orden.index(p_fin)
 
-        if i2 > i1:
-            ruta = orden[i1:i2]
-        else:
-            ruta = orden[i1:] + orden[:i2]
-
-        inter = orden[i1+1:i2] if i2 > i1 else orden[i1+1:] + orden[:i2]
+        ruta = orden[i1:i2] if i2>i1 else orden[i1:]+orden[:i2]
+        inter = orden[i1+1:i2] if i2>i1 else orden[i1+1:]+orden[:i2]
 
         tipo = "recta" if len(inter)==0 else "quebrada"
 
-        txt = ""
-
+        # Intermedios
+        texto_int=""
         if len(inter)>0:
-            txt="pasando por los puntos de coordenadas "
+            texto_int="pasando por los puntos de coordenadas "
             for p in inter:
-                N,E=coords[p]
-                txt+=f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-            txt=txt.rstrip(", ")+", "
+                N,E = coords[p]
+                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+            texto_int = texto_int.rstrip(", ") + ", "
 
         dist = f(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta))
 
-        N1,E1=coords[p_ini]
-        N2,E2=coords[p_fin]
+        N_ini,E_ini = coords[p_ini]
+        N_fin,E_fin = coords[p_fin]
 
         texto = (
-            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N1)} m, E= {f(E1)} m; "
-            f"en línea {tipo}, {txt}"
+            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
+            f"en línea {tipo}, en sentido {sentido}, {texto_int}"
             f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} "
-            f"de coordenadas planas N= {f(N2)} m, E= {f(E2)} m"
+            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
         )
 
         fila = b[-1]
 
         texto += f"; colinda con {fila['COL']}"
 
-        if fila["COND"].upper() == "TRASLAPA":
+        if str(fila["COND"]).upper()=="TRASLAPA":
             texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
-        elif fila["COND"].upper() == "CORRESPONDE":
+        elif str(fila["COND"]).upper()=="CORRESPONDE":
             texto += f", que corresponde con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
         else:
             texto += "."
