@@ -210,66 +210,54 @@ if puntos_file and lineas_file:
     else:
         st.success("✅ Todas las distancias coinciden")
 # =====================================================
-# 🔹 FASE 4 — GENERACIÓN DE LINDEROS
+# 🔹 FASE 4 — LINDEROS OPTIMIZADOS
 # =====================================================
 
-st.markdown("### 🧾 Fase 4 — Linderos RTL")
+st.markdown("### 🧾 Linderos RTL (optimizados)")
 
 bloques = []
-bloque_actual = [df_tramos.iloc[0]]
+actual = [df_tramos.iloc[0]]
 
 for i in range(1, len(df_tramos)):
-    actual = df_tramos.iloc[i]
-    anterior = bloque_actual[-1]
+    t = df_tramos.iloc[i]
+    u = actual[-1]
 
+    # ✅ NUEVA REGLA: incluye SENTIDO
     if (
-        actual["CARDINALIDAD"] == anterior["CARDINALIDAD"]
-        and actual["COLINDANTE"] == anterior["COLINDANTE"]
+        t["CARD"] == u["CARD"] and
+        t["COL"] == u["COL"] and
+        t["SENTIDO"] == u["SENTIDO"]
     ):
-        bloque_actual.append(actual)
+        actual.append(t)
     else:
-        bloques.append(bloque_actual)
-        bloque_actual = [actual]
+        bloques.append(actual)
+        actual = [t]
 
-# agregar último bloque
-bloques.append(bloque_actual)
+bloques.append(actual)
 
-# -------------------- REDACCIÓN --------------------
+# ---------------- REDACCIÓN ----------------
 
-resultado = ""
+texto = ""
 
-for i, bloque in enumerate(bloques, start=1):
+for i, bloque in enumerate(bloques, 1):
 
-    card = bloque[0]["CARDINALIDAD"]
-    col = bloque[-1]["COLINDANTE"]
+    card = bloque[0]["CARD"]
+    col = bloque[-1]["COL"]
 
-    for j, tramo in enumerate(bloque):
+    p_ini = bloque[0]["INI"]
+    p_fin = bloque[-1]["FIN"]
+    sentido = bloque[0]["SENTIDO"]
 
-        p_ini = tramo["PUNTO_INI"]
-        p_fin = tramo["PUNTO_FIN"]
-        sentido = tramo["SENTIDO"]
+    # 🔥 SI SOLO HAY UN BLOQUE
+    texto += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}"
 
-        # 🔹 Primera línea
-        if j == 0:
-            resultado += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}\n"
+    # ✅ Si hay cambio después, manejar "continua"
+    if len(bloque) > 1:
+        texto += ""
 
-        # 🔹 Intermedios
-        elif j < len(bloque) - 1:
-            resultado += f"continua: puntos {p_ini} al {p_fin}, sentido {sentido}\n"
+    # ✅ SI ES EL ÚLTIMO DEL LINDERO → colindante
+    texto += f", colinda con {col}\n\n"
 
-        # 🔹 Último tramo
-        else:
+st.subheader("📄 RTL generado")
+st.text_area("Resultado", texto, height=400)
 
-            # ✅ si solo hay un tramo en el bloque
-            if len(bloque) == 1:
-                resultado += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}, colinda con {col}\n"
-
-            else:
-                resultado += f"continua: puntos {p_ini} al {p_fin}, sentido {sentido}, colinda con {col}\n"
-
-    resultado += "\n"
-
-# -------------------- MOSTRAR RESULTADO --------------------
-
-st.subheader("🧾 Resultado RTL–MC PRECISO")
-st.text_area("Resultado", resultado, height=400)
