@@ -209,3 +209,67 @@ if puntos_file and lineas_file:
         st.dataframe(pd.DataFrame(errores))
     else:
         st.success("✅ Todas las distancias coinciden")
+# =====================================================
+# 🔹 FASE 4 — GENERACIÓN DE LINDEROS
+# =====================================================
+
+st.markdown("### 🧾 Fase 4 — Linderos RTL")
+
+bloques = []
+bloque_actual = [df_tramos.iloc[0]]
+
+for i in range(1, len(df_tramos)):
+    actual = df_tramos.iloc[i]
+    anterior = bloque_actual[-1]
+
+    if (
+        actual["CARDINALIDAD"] == anterior["CARDINALIDAD"]
+        and actual["COLINDANTE"] == anterior["COLINDANTE"]
+    ):
+        bloque_actual.append(actual)
+    else:
+        bloques.append(bloque_actual)
+        bloque_actual = [actual]
+
+# agregar último bloque
+bloques.append(bloque_actual)
+
+# -------------------- REDACCIÓN --------------------
+
+resultado = ""
+
+for i, bloque in enumerate(bloques, start=1):
+
+    card = bloque[0]["CARDINALIDAD"]
+    col = bloque[-1]["COLINDANTE"]
+
+    for j, tramo in enumerate(bloque):
+
+        p_ini = tramo["PUNTO_INI"]
+        p_fin = tramo["PUNTO_FIN"]
+        sentido = tramo["SENTIDO"]
+
+        # 🔹 Primera línea
+        if j == 0:
+            resultado += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}\n"
+
+        # 🔹 Intermedios
+        elif j < len(bloque) - 1:
+            resultado += f"continua: puntos {p_ini} al {p_fin}, sentido {sentido}\n"
+
+        # 🔹 Último tramo
+        else:
+
+            # ✅ si solo hay un tramo en el bloque
+            if len(bloque) == 1:
+                resultado += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}, colinda con {col}\n"
+
+            else:
+                resultado += f"continua: puntos {p_ini} al {p_fin}, sentido {sentido}, colinda con {col}\n"
+
+    resultado += "\n"
+
+# -------------------- MOSTRAR RESULTADO --------------------
+
+st.subheader("🧾 Resultado RTL–MC PRECISO")
+st.text_area("Resultado", resultado, height=400)
