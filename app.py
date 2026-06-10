@@ -16,6 +16,9 @@ def cargar_archivo(file):
     else:
         return pd.read_csv(file, dtype=str)
 
+def f(v):
+    return f"{v:.1f}".replace(".", ",")
+
 def clasificar_sentido(ang):
     if ang < 22.5:
         return "norte"
@@ -35,9 +38,6 @@ def clasificar_sentido(ang):
         return "noroeste"
     else:
         return "norte"
-
-def format_dist(x):
-    return str(round(x, 1)).replace(".", ",")
 
 # =========================================================
 # CARGA
@@ -61,18 +61,12 @@ if puntos_file and lineas_file:
     df_l = df_l[df_l["CONSECUTIVO"] == cons]
 
     # ---------------- LIMPIEZA ----------------
-
     df_p["ORDEN"] = df_p["ORDEN"].astype(int)
     df_p = df_p.sort_values("ORDEN")
 
-    df_p["PUNTO"] = df_p["ORDEN"].astype(str).str.zfill(2)
-
-    # ✅ coordenadas doble manejo
     df_p["NORTE"] = df_p["Y"].str.replace(",", ".").astype(float)
     df_p["ESTE"] = df_p["X"].str.replace(",", ".").astype(float)
-
-    df_p["NORTE_TXT"] = df_p["Y"]
-    df_p["ESTE_TXT"] = df_p["X"]
+    df_p["PUNTO"] = df_p["ORDEN"].astype(str).str.zfill(2)
 
     df_l["ORDEN"] = df_l["ORDEN"].astype(int)
     df_l = df_l.sort_values("ORDEN")
@@ -82,26 +76,21 @@ if puntos_file and lineas_file:
 
     puntos = df_p["PUNTO"].tolist()
 
-    coords = {
-        r["PUNTO"]: {
-            "N": r["NORTE"],
-            "E": r["ESTE"],
-            "N_txt": r["NORTE_TXT"],
-            "E_txt": r["ESTE_TXT"]
-        }
-        for _, r in df_p.iterrows()
-    }
+    coords = {r["PUNTO"]:(r["NORTE"],r["ESTE"]) for _,r in df_p.iterrows()}
 
     # =====================================================
-    # VISUALIZACIÓN
+    # 🔥 VISUALIZACIÓN DEL POLÍGONO
     # =====================================================
 
-    st.markdown("### 🗺️ Polígono")
+    st.markdown("### 🗺️ Visualización del polígono")
 
-    x, y = [], []
+    x = []
+    y = []
+
     for p in puntos:
-        x.append(coords[p]["E"])
-        y.append(coords[p]["N"])
+        N,E = coords[p]
+        x.append(E)
+        y.append(N)
 
     x.append(x[0])
     y.append(y[0])
@@ -112,10 +101,14 @@ if puntos_file and lineas_file:
     for i, p in enumerate(puntos):
         ax.text(x[i], y[i], p)
 
+    ax.set_title("Polígono del predio")
+    ax.set_xlabel("ESTE")
+    ax.set_ylabel("NORTE")
+
     st.pyplot(fig)
 
     # =====================================================
-    # TRAMOS + VALIDACIÓN
+    # TRAMOS
     # =====================================================
 
     tramos = []
@@ -125,10 +118,8 @@ if puntos_file and lineas_file:
         p1 = puntos[i]
         p2 = puntos[(i+1)%len(puntos)]
 
-        N1 = coords[p1]["N"]
-        E1 = coords[p1]["E"]
-        N2 = coords[p2]["N"]
-        E2 = coords[p2]["E"]
+        N1,E1 = coords[p1]
+        N2,E2 = coords[p2]
 
         dx = E2 - E1
         dy = N2 - N1
@@ -137,25 +128,25 @@ if puntos_file and lineas_file:
 
         dist_calc = round(math.sqrt((N2-N1)**2 + (E2-E1)**2),1)
         dist_tab = df_l.iloc[i]["LONGITUD"]
-
         dif = round(abs(dist_calc - dist_tab),1)
 
         tramos.append({
             "INI":p1,
             "FIN":p2,
+            "ANGULO":ang,
             "DIST_CALC":dist_calc,
             "DIST_TAB":dist_tab,
             "DIF":dif,
             "ESTADO":"✅ OK" if dif==0 else "❌ ERROR",
-            "ANGULO":ang,
             "CARD":df_l.iloc[i]["CARDINALDIAD"],
-            "COL":df_l.iloc[i]["COL"]
+            "COL":df_l.iloc[i]["COL"],
+            "COND":df_l.iloc[i]["OBSERVACIONES"],
+            "NPN":df_l.iloc[i]["NPN_COLINDANTE"],
+            "FMI":df_l.iloc[i]["FMI_COLINDANTE"],
+            "TIT":df_l.iloc[i]["NOMBRE_PREDIO_COL"]
         })
 
     df_tramos = pd.DataFrame(tramos)
-
-    st.subheader("📐 VALIDACIÓN DE DISTANCIAS")
-    st.dataframe(df_tramos)
 
     # =====================================================
     # QUIEBRES REALES
@@ -186,6 +177,26 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
+    # TABLAS
+    # =====================================================
+
+    st.subheader("📐 Tramos técnicos")
+    st.dataframe(df_tramos)
+
+    info = []
+    for i,b in enumerate(bloques,1):
+        info.append({
+            "LINDERO":i,
+            "INI":b[0]["INI"],
+            "FIN":b[-1]["FIN"],
+            "CARD":b[0]["CARD"],
+            "COL":b[0]["COL"]
+        })
+
+    st.subheader("📊 Linderos agrupados")
+    st.dataframe(pd.DataFrame(info))
+
+    # =====================================================
     # RTL FINAL
     # =====================================================
 
@@ -205,8 +216,10 @@ if puntos_file and lineas_file:
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
-        # ✅ sentido promedio real
-        sen, cos = 0, 0
+        # 🔥 SENTIDO PROMEDIO
+        sen = 0
+        cos = 0
+
         for t in b:
             ang_rad = math.radians(t["ANGULO"])
             sen += math.sin(ang_rad)
@@ -223,34 +236,36 @@ if puntos_file and lineas_file:
 
         tipo = "recta" if len(inter)==0 else "quebrada"
 
-        # -------- intermedios con coordenadas EXACTAS
         texto_int = ""
-
         if len(inter)>0:
-            texto_int = "pasando por los puntos de coordenadas "
+            texto_int="pasando por los puntos de coordenadas "
             for p in inter:
-                texto_int += f"punto {p} N= {coords[p]['N_txt']} m, E= {coords[p]['E_txt']} m, "
+                N,E = coords[p]
+                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
             texto_int = texto_int.rstrip(", ") + ", "
 
-        # -------- distancia desde tabla
-        dist_total = sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta)
-        dist = format_dist(dist_total)
+        dist = f(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta))
 
-        N_ini = coords[p_ini]["N_txt"]
-        E_ini = coords[p_ini]["E_txt"]
-        N_fin = coords[p_fin]["N_txt"]
-        E_fin = coords[p_fin]["E_txt"]
+        N_ini,E_ini = coords[p_ini]
+        N_fin,E_fin = coords[p_fin]
 
         texto = (
-            f"Inicia en el punto {p_ini} con coordenadas planas N= {N_ini} m, E= {E_ini} m; "
+            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
             f"en línea {tipo}, en sentido {sentido}, {texto_int}"
             f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} "
-            f"de coordenadas planas N= {N_fin} m, E= {E_fin} m"
+            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
         )
 
         fila = b[-1]
 
-        texto += f"; colinda con {fila['COL']}."
+        texto += f"; colinda con {fila['COL']}"
+
+        if str(fila["COND"]).upper()=="TRASLAPA":
+            texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
+        elif str(fila["COND"]).upper()=="CORRESPONDE":
+            texto += f", que corresponde con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
+        else:
+            texto += "."
 
         salida += texto + "\n\n"
 
