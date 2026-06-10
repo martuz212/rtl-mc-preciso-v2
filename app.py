@@ -11,37 +11,24 @@ st.markdown("### 1️⃣ Carga de información")
 puntos_file = st.file_uploader("📌 Cargar tabla de puntos", type=["xlsx", "csv"])
 lineas_file = st.file_uploader("📐 Cargar tabla de líneas", type=["xlsx", "csv"])
 
-# ------------------ FUNCIÓN CARGA ------------------
+# ------------------ FUNCIÓN ------------------
 def cargar_archivo(file):
     if file.name.endswith(".xlsx"):
-        df = pd.read_excel(file, dtype=str)  # 🔥 fuerza todo a texto
+        df = pd.read_excel(file, dtype=str)
     else:
         df = pd.read_csv(file, dtype=str)
 
-    # 🔥 limpieza básica nombres columnas
     df.columns = df.columns.str.strip()
-
     return df
 
-# ------------------ PROCESO ------------------
+# ------------------ PROCESO PRINCIPAL ------------------
 
-if puntos_file:
+if puntos_file and lineas_file:
+
     df_p = cargar_archivo(puntos_file)
-
-    st.subheader("📌 Tabla de puntos (vista)")
-    st.dataframe(df_p.head())
-
-if lineas_file:
     df_l = cargar_archivo(lineas_file)
 
-    st.subheader("📐 Tabla de líneas (vista)")
-    st.dataframe(df_l.head())
-
-# ------------------ SELECCIÓN CONSECUTIVO ------------------
-if puntos_file:
-
-    df_p = cargar_archivo(puntos_file)
-
+    # 🔍 Validar columna CONSECUTIVO
     if "CONSECUTIVO" in df_p.columns:
 
         consecutivos = df_p["CONSECUTIVO"].unique()
@@ -53,10 +40,20 @@ if puntos_file:
 
         st.success(f"✅ Polígono seleccionado: {cons_sel}")
 
-        # 🔥 Mostrar cuántos registros tiene ese polígono
-        total = df_p[df_p["CONSECUTIVO"] == cons_sel].shape[0]
+        # ✅ FILTRAR
+        df_p_filtrado = df_p[df_p["CONSECUTIVO"] == cons_sel]
+        df_l_filtrado = df_l[df_l["CONSECUTIVO"] == cons_sel]
 
-        st.info(f"📊 Número de puntos del polígono: {total}")
+        # ✅ MOSTRAR RESULTADOS FILTRADOS
+        st.subheader(f"📌 Tabla de puntos (CONSECUTIVO {cons_sel})")
+        st.dataframe(df_p_filtrado)
+
+        st.subheader(f"📐 Tabla de líneas (CONSECUTIVO {cons_sel})")
+        st.dataframe(df_l_filtrado)
+
+        # Información adicional
+        st.info(f"📊 Total puntos: {len(df_p_filtrado)}")
+        st.info(f"📐 Total tramos: {len(df_l_filtrado)}")
 
     else:
-        st.error("⚠️ No se encontró la columna CONSECUTIVO en la tabla de puntos")
+        st.error("⚠️ La tabla de puntos no tiene la columna CONSECUTIVO")
