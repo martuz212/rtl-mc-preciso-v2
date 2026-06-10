@@ -16,8 +16,9 @@ def cargar_archivo(file):
     else:
         return pd.read_csv(file, dtype=str)
 
+# ✅ coordenadas a 2 decimales
 def f(v):
-    return f"{v:.1f}".replace(".", ",")
+    return f"{v:.2f}".replace(".", ",")
 
 def clasificar_sentido(ang):
     if ang < 22.5:
@@ -61,6 +62,7 @@ if puntos_file and lineas_file:
     df_l = df_l[df_l["CONSECUTIVO"] == cons]
 
     # ---------------- LIMPIEZA ----------------
+
     df_p["ORDEN"] = df_p["ORDEN"].astype(int)
     df_p = df_p.sort_values("ORDEN")
 
@@ -79,13 +81,12 @@ if puntos_file and lineas_file:
     coords = {r["PUNTO"]:(r["NORTE"],r["ESTE"]) for _,r in df_p.iterrows()}
 
     # =====================================================
-    # 🔥 VISUALIZACIÓN DEL POLÍGONO
+    # VISUALIZACIÓN
     # =====================================================
 
     st.markdown("### 🗺️ Visualización del polígono")
 
-    x = []
-    y = []
+    x,y = [],[]
 
     for p in puntos:
         N,E = coords[p]
@@ -98,12 +99,8 @@ if puntos_file and lineas_file:
     fig, ax = plt.subplots()
     ax.plot(x, y, marker='o')
 
-    for i, p in enumerate(puntos):
+    for i,p in enumerate(puntos):
         ax.text(x[i], y[i], p)
-
-    ax.set_title("Polígono del predio")
-    ax.set_xlabel("ESTE")
-    ax.set_ylabel("NORTE")
 
     st.pyplot(fig)
 
@@ -149,7 +146,7 @@ if puntos_file and lineas_file:
     df_tramos = pd.DataFrame(tramos)
 
     # =====================================================
-    # QUIEBRES REALES
+    # QUIEBRES
     # =====================================================
 
     bloques = []
@@ -177,7 +174,7 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
-    # TABLAS
+    # ✅ TABLAS RESTAURADAS
     # =====================================================
 
     st.subheader("📐 Tramos técnicos")
@@ -216,10 +213,7 @@ if puntos_file and lineas_file:
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
-        # 🔥 SENTIDO PROMEDIO
-        sen = 0
-        cos = 0
-
+        sen,cos = 0,0
         for t in b:
             ang_rad = math.radians(t["ANGULO"])
             sen += math.sin(ang_rad)
@@ -236,7 +230,7 @@ if puntos_file and lineas_file:
 
         tipo = "recta" if len(inter)==0 else "quebrada"
 
-        texto_int = ""
+        texto_int=""
         if len(inter)>0:
             texto_int="pasando por los puntos de coordenadas "
             for p in inter:
