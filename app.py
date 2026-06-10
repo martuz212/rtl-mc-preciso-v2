@@ -173,37 +173,37 @@ if puntos_file and lineas_file:
 
     bloques.append(actual)
 
-# =====================================================
-# TABLAS
-# =====================================================
+    # =====================================================
+    # TABLAS
+    # =====================================================
 
-# 🔥 TABLA DE COORDENADAS (PUNTOS)
-st.subheader("📍 Coordenadas de puntos")
-st.dataframe(
-    df_p[[
-        "PUNTO",
-        "NORTE",
-        "ESTE"
-    ]]
-)
+    # 🔥 TABLA DE COORDENADAS (PUNTOS)
+    st.subheader("📍 Coordenadas de puntos")
+    st.dataframe(
+        df_p[[
+            "PUNTO",
+            "NORTE",
+            "ESTE"
+        ]]
+    )
 
-# 🔥 TABLA DE TRAMOS
-st.subheader("📐 Tramos técnicos")
-st.dataframe(df_tramos)
+    # 🔥 TABLA DE TRAMOS
+    st.subheader("📐 Tramos técnicos")
+    st.dataframe(df_tramos)
 
-# 🔥 TABLA DE LINDEROS
-info = []
-for i, b in enumerate(bloques, 1):
-    info.append({
-        "LINDERO": i,
-        "INI": b[0]["INI"],
-        "FIN": b[-1]["FIN"],
-        "CARD": b[0]["CARD"],
-        "COL": b[0]["COL"]
-    })
+    # 🔥 TABLA DE LINDEROS
+    info = []
+    for i, b in enumerate(bloques, 1):
+        info.append({
+            "LINDERO": i,
+            "INI": b[0]["INI"],
+            "FIN": b[-1]["FIN"],
+            "CARD": b[0]["CARD"],
+            "COL": b[0]["COL"]
+        })
 
-st.subheader("📊 Linderos agrupados")
-st.dataframe(pd.DataFrame(info))
+    st.subheader("📊 Linderos agrupados")
+    st.dataframe(pd.DataFrame(info))
 
 
     # =====================================================
