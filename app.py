@@ -20,19 +20,18 @@ def cargar_archivo(file):
     df.columns = df.columns.str.strip()
     return df
 
-# ✅ función de redondeo (1 decimal)
 def f1(x):
     return round(x, 1)
 
 # =========================================================
-# 🔹 FASE 1 — CARGA
+# 🔹 CARGA
 # =========================================================
 
-puntos_file = st.file_uploader("📌 Cargar tabla de puntos", type=["xlsx", "csv"])
-lineas_file = st.file_uploader("📐 Cargar tabla de líneas", type=["xlsx", "csv"])
+puntos_file = st.file_uploader("📌 Tabla de puntos", type=["xlsx", "csv"])
+lineas_file = st.file_uploader("📐 Tabla de líneas", type=["xlsx", "csv"])
 
 # =========================================================
-# 🔹 PROCESO PRINCIPAL
+# 🔹 PROCESO
 # =========================================================
 
 if puntos_file and lineas_file:
@@ -40,124 +39,76 @@ if puntos_file and lineas_file:
     df_p = cargar_archivo(puntos_file)
     df_l = cargar_archivo(lineas_file)
 
-    # =====================================================
-    # 🔹 SELECCIÓN
-    # =====================================================
-
-    if "CONSECUTIVO" not in df_p.columns:
-        st.error("⚠️ No existe columna CONSECUTIVO")
-        st.stop()
-
+    # ---------------- SELECCIÓN ----------------
     consecutivos = df_p["CONSECUTIVO"].unique()
 
-    cons_sel = st.selectbox(
-        "🔍 Selecciona el polígono (CONSECUTIVO)",
-        consecutivos
-    )
-
+    cons_sel = st.selectbox("🔍 CONSECUTIVO", consecutivos)
     st.success(f"✅ Polígono seleccionado: {cons_sel}")
 
-    # =====================================================
-    # 🔹 FILTRADO
-    # =====================================================
-
-    df_p_filtrado = df_p[df_p["CONSECUTIVO"] == cons_sel]
-    df_l_filtrado = df_l[df_l["CONSECUTIVO"] == cons_sel]
+    df_p = df_p[df_p["CONSECUTIVO"] == cons_sel]
+    df_l = df_l[df_l["CONSECUTIVO"] == cons_sel]
 
     # =====================================================
     # 🔹 FASE 2 — LIMPIEZA
     # =====================================================
 
-    st.markdown("### 🧹 Fase 2 — Limpieza")
+    st.markdown("### 🧹 Limpieza")
 
-    df_p_clean = df_p_filtrado.copy()
-    df_l_clean = df_l_filtrado.copy()
+    df_p["ORDEN"] = df_p["ORDEN"].astype(int)
+    df_p = df_p.sort_values("ORDEN")
 
-    # -------- PUNTOS --------
-    df_p_clean["ORDEN"] = df_p_clean["ORDEN"].astype(int)
-    df_p_clean = df_p_clean.sort_values("ORDEN")
+    df_p["NORTE"] = df_p["Y"].str.replace(",", ".").astype(float)
+    df_p["ESTE"] = df_p["X"].str.replace(",", ".").astype(float)
+    df_p["PUNTO"] = df_p["ORDEN"].astype(str).str.zfill(2)
 
-    df_p_clean["NORTE"] = df_p_clean["Y"].str.replace(",", ".").astype(float)
-    df_p_clean["ESTE"] = df_p_clean["X"].str.replace(",", ".").astype(float)
+    df_l["ORDEN"] = df_l["ORDEN"].astype(int)
+    df_l = df_l.sort_values("ORDEN")
 
-    df_p_clean["PUNTO"] = df_p_clean["ORDEN"].astype(str).str.zfill(2)
+    df_l["LONGITUD"] = df_l["LONGITUD"].str.replace(",", ".").astype(float)
+    df_l["COLINDANTE"] = df_l["NOM_COLINDANTE"].str.strip()
+    df_l["COND"] = df_l["OBSERVACIONES"].str.strip()
 
-    # -------- LINEAS --------
-    df_l_clean["ORDEN"] = df_l_clean["ORDEN"].astype(int)
-    df_l_clean = df_l_clean.sort_values("ORDEN")
+    st.subheader("📌 Puntos")
+    st.dataframe(df_p[["PUNTO", "NORTE", "ESTE"]])
 
-    df_l_clean["LONGITUD"] = df_l_clean["LONGITUD"].str.replace(",", ".").astype(float)
-
-    df_l_clean["COLINDANTE"] = df_l_clean["NOM_COLINDANTE"].str.strip()
-    df_l_clean["CONDICION"] = df_l_clean["OBSERVACIONES"].str.strip()
-    df_l_clean["TITULAR"] = df_l_clean["NOMBRE_PREDIO_COL"].str.strip()
-
-    # -------- VALIDACIÓN --------
-    st.write(f"📊 Puntos: {len(df_p_clean)}")
-    st.write(f"📐 Tramos: {len(df_l_clean)}")
-
-    if len(df_p_clean) != len(df_l_clean):
-        st.warning("⚠️ cantidad no coincide")
-
-    # -------- MOSTRAR --------
-    st.subheader("📌 Puntos limpios")
-    st.dataframe(df_p_clean[["PUNTO", "NORTE", "ESTE"]])
-
-    st.subheader("📐 Líneas limpias")
-    st.dataframe(
-        df_l_clean[
-            [
-                "ORDEN",
-                "LONGITUD",
-                "CARDINALDIAD",
-                "COLINDANTE",
-                "CONDICION",
-                "TITULAR",
-                "NPN_COLINDANTE",
-                "FMI_COLINDANTE"
-            ]
-        ]
-    )
+    st.subheader("📐 Líneas")
+    st.dataframe(df_l[[
+        "ORDEN","LONGITUD","CARDINALDIAD",
+        "COLINDANTE","COND","NPN_COLINDANTE","FMI_COLINDANTE"
+    ]])
 
     # =====================================================
     # 🔹 FASE 3 — GEOMETRÍA
     # =====================================================
 
-    st.markdown("### 🧭 Fase 3 — Construcción geométrica")
+    st.markdown("### 🧭 Tramos y validación")
 
-    puntos_lista = df_p_clean["PUNTO"].tolist()
+    puntos = df_p["PUNTO"].tolist()
 
     coords = {
-        row["PUNTO"]: (row["NORTE"], row["ESTE"])
-        for _, row in df_p_clean.iterrows()
+        r["PUNTO"]: (r["NORTE"], r["ESTE"])
+        for _, r in df_p.iterrows()
     }
 
     tramos = []
     errores = []
 
-    for i in range(len(puntos_lista)):
+    for i in range(len(puntos)):
 
-        p1 = puntos_lista[i]
-        p2 = puntos_lista[(i + 1) % len(puntos_lista)]
+        p1 = puntos[i]
+        p2 = puntos[(i + 1) % len(puntos)]
 
         N1, E1 = coords[p1]
         N2, E2 = coords[p2]
 
-        # -------- DISTANCIA --------
-        dist_calc = math.sqrt((N2 - N1)**2 + (E2 - E1)**2)
-        dist_calc = f1(dist_calc)
+        dist_calc = f1(math.sqrt((N2-N1)**2 + (E2-E1)**2))
+        dist_tab = df_l.iloc[i]["LONGITUD"]
 
-        dist_tabla = df_l_clean.iloc[i]["LONGITUD"]
-
-        dif = abs(dist_calc - dist_tabla)
-        dif = f1(dif)
-
+        dif = f1(abs(dist_calc - dist_tab))
         estado = "✅ OK" if dif == 0 else "❌ ERROR"
 
-        # -------- SENTIDO --------
         dx = E2 - E1
         dy = N2 - N1
-
         ang = math.degrees(math.atan2(dx, dy)) % 360
 
         if ang < 22.5:
@@ -179,18 +130,18 @@ if puntos_file and lineas_file:
         else:
             sentido = "norte"
 
-        fila = df_l_clean.iloc[i]
+        fila = df_l.iloc[i]
 
         tramo = {
-            "PUNTO_INI": p1,
-            "PUNTO_FIN": p2,
-            "DIST_CALCULADA": dist_calc,
-            "DIST_TABLA": dist_tabla,
+            "INI": p1,
+            "FIN": p2,
+            "DIST_CALC": dist_calc,
+            "DIST_TAB": dist_tab,
             "DIF": dif,
             "ESTADO": estado,
             "SENTIDO": sentido,
-            "CARDINALIDAD": fila["CARDINALDIAD"],
-            "COLINDANTE": fila["COLINDANTE"]
+            "CARD": fila["CARDINALDIAD"],
+            "COL": fila["COLINDANTE"]
         }
 
         tramos.append(tramo)
@@ -200,64 +151,53 @@ if puntos_file and lineas_file:
 
     df_tramos = pd.DataFrame(tramos)
 
-    st.subheader("📐 Tramos calculados")
+    st.subheader("📐 Tramos")
     st.dataframe(df_tramos)
 
-    # -------- VALIDADOR --------
     if errores:
-        st.subheader("🚨 Errores de distancia")
+        st.subheader("🚨 Errores")
         st.dataframe(pd.DataFrame(errores))
     else:
-        st.success("✅ Todas las distancias coinciden")
-# =====================================================
-# 🔹 FASE 4 — LINDEROS OPTIMIZADOS
-# =====================================================
+        st.success("✅ Validación OK")
 
-st.markdown("### 🧾 Linderos RTL (optimizados)")
+    # =====================================================
+    # 🔹 FASE 4 — LINDEROS OPTIMIZADOS
+    # =====================================================
 
-bloques = []
-actual = [df_tramos.iloc[0]]
+    st.markdown("### 🧾 Linderos RTL (optimizados)")
 
-for i in range(1, len(df_tramos)):
-    t = df_tramos.iloc[i]
-    u = actual[-1]
+    bloques = []
+    actual = [df_tramos.iloc[0]]
 
-    # ✅ NUEVA REGLA: incluye SENTIDO
-    if (
-        t["CARD"] == u["CARD"] and
-        t["COL"] == u["COL"] and
-        t["SENTIDO"] == u["SENTIDO"]
-    ):
-        actual.append(t)
-    else:
-        bloques.append(actual)
-        actual = [t]
+    for i in range(1, len(df_tramos)):
+        t = df_tramos.iloc[i]
+        u = actual[-1]
 
-bloques.append(actual)
+        # 🔥 regla PRO: incluye sentido
+        if (
+            t["CARD"] == u["CARD"] and
+            t["COL"] == u["COL"] and
+            t["SENTIDO"] == u["SENTIDO"]
+        ):
+            actual.append(t)
+        else:
+            bloques.append(actual)
+            actual = [t]
 
-# ---------------- REDACCIÓN ----------------
+    bloques.append(actual)
 
-texto = ""
+    texto = ""
 
-for i, bloque in enumerate(bloques, 1):
+    for i, bloque in enumerate(bloques, 1):
 
-    card = bloque[0]["CARD"]
-    col = bloque[-1]["COL"]
+        card = bloque[0]["CARD"]
+        col = bloque[-1]["COL"]
 
-    p_ini = bloque[0]["INI"]
-    p_fin = bloque[-1]["FIN"]
-    sentido = bloque[0]["SENTIDO"]
+        p_ini = bloque[0]["INI"]
+        p_fin = bloque[-1]["FIN"]
+        sentido = bloque[0]["SENTIDO"]
 
-    # 🔥 SI SOLO HAY UN BLOQUE
-    texto += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}"
+        texto += f"Lindero {i} ({card}): puntos {p_ini} al {p_fin}, sentido {sentido}, colinda con {col}\n\n"
 
-    # ✅ Si hay cambio después, manejar "continua"
-    if len(bloque) > 1:
-        texto += ""
-
-    # ✅ SI ES EL ÚLTIMO DEL LINDERO → colindante
-    texto += f", colinda con {col}\n\n"
-
-st.subheader("📄 RTL generado")
-st.text_area("Resultado", texto, height=400)
-
+    st.subheader("📄 RTL generado")
+    st.text_area("Resultado", texto, height=400)
