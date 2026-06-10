@@ -99,5 +99,99 @@ if puntos_file and lineas_file:
             ]
         )
 
+# -------------------- FASE 3: TRAMOS Y SENTIDOS --------------------
+
+st.markdown("### 🧭 Construcción geométrica")
+
+import math
+
+# 🔹 Lista de puntos ordenados
+puntos_lista = df_p_clean["PUNTO"].tolist()
+
+# 🔹 Diccionario de coordenadas
+coords = {
+    row["PUNTO"]: (row["NORTE"], row["ESTE"])
+    for _, row in df_p_clean.iterrows()
+}
+
+tramos = []
+errores = []
+
+for i in range(len(puntos_lista)):
+
+    p1 = puntos_lista[i]
+    p2 = puntos_lista[(i + 1) % len(puntos_lista)]  # cierre automático
+
+    N1, E1 = coords[p1]
+    N2, E2 = coords[p2]
+
+    # 🔹 Distancia calculada
+    dist_calc = math.sqrt((N2 - N1)**2 + (E2 - E1)**2)
+
+    # 🔹 Distancia tabla
+    dist_tabla = df_l_clean.iloc[i]["LONGITUD"]
+
+    # 🔹 Diferencia
+    dif = abs(dist_calc - dist_tabla)
+
+    estado = "✅ OK" if dif < 1 else "❌ ERROR"
+
+    # 🔹 Calcular sentido
+    dx = E2 - E1
+    dy = N2 - N1
+
+    ang = math.degrees(math.atan2(dx, dy)) % 360
+
+    if ang < 22.5:
+        sentido = "norte"
+    elif ang < 67.5:
+        sentido = "noreste"
+    elif ang < 112.5:
+        sentido = "este"
+    elif ang < 157.5:
+        sentido = "sureste"
+    elif ang < 202.5:
+        sentido = "sur"
+    elif ang < 247.5:
+        sentido = "suroeste"
+    elif ang < 292.5:
+        sentido = "oeste"
+    elif ang < 337.5:
+        sentido = "noroeste"
+    else:
+        sentido = "norte"
+
+    fila_linea = df_l_clean.iloc[i]
+
+    tramos.append({
+        "PUNTO_INI": p1,
+        "PUNTO_FIN": p2,
+        "DIST_CALCULADA": round(dist_calc, 2),
+        "DIST_TABLA": dist_tabla,
+        "DIFERENCIA": round(dif, 2),
+        "ESTADO": estado,
+        "SENTIDO": sentido,
+        "CARDINALIDAD": fila_linea["CARDINALDIAD"],
+        "COLINDANTE": fila_linea["COLINDANTE"]
+    })
+
+    if estado == "❌ ERROR":
+        errores.append(tramos[-1])
+
+# -------------------- RESULTADOS --------------------
+
+df_tramos = pd.DataFrame(tramos)
+
+st.subheader("📐 Tramos calculados")
+st.dataframe(df_tramos)
+
+# -------------------- VALIDADOR --------------------
+
+if errores:
+    st.subheader("🚨 Errores de distancia")
+    st.dataframe(pd.DataFrame(errores))
+else:
+    st.success("✅ Todas las distancias coinciden correctamente")
+
     else:
         st.error("⚠️ La tabla de puntos no tiene la columna CONSECUTIVO")
