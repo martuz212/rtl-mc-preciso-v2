@@ -2,10 +2,8 @@ import streamlit as st
 import pandas as pd
 import math
 
-st.set_page_config(page_title="RTL–MC PRECISO V2", layout="wide")
-st.title("🧭 RTL–MC PRECISO V2")
-
-st.markdown("### 1️⃣ Carga de información")
+st.set_page_config(page_title="RTL–MC PRECISO PRO", layout="wide")
+st.title("🧭 RTL–MC PRECISO PRO")
 
 # =========================================================
 # 🔹 FUNCIONES
@@ -20,8 +18,8 @@ def cargar_archivo(file):
     df.columns = df.columns.str.strip()
     return df
 
-def f1(x):
-    return round(x, 1)
+def f(v):
+    return f"{v:.1f}".replace(".", ",")
 
 # =========================================================
 # 🔹 CARGA
@@ -40,19 +38,15 @@ if puntos_file and lineas_file:
     df_l = cargar_archivo(lineas_file)
 
     # ---------------- SELECCIÓN ----------------
-    consecutivos = df_p["CONSECUTIVO"].unique()
-
-    cons_sel = st.selectbox("🔍 CONSECUTIVO", consecutivos)
+    cons_sel = st.selectbox("🔍 CONSECUTIVO", df_p["CONSECUTIVO"].unique())
     st.success(f"✅ Polígono seleccionado: {cons_sel}")
 
     df_p = df_p[df_p["CONSECUTIVO"] == cons_sel]
     df_l = df_l[df_l["CONSECUTIVO"] == cons_sel]
 
     # =====================================================
-    # 🔹 FASE 2 — LIMPIEZA
+    # 🔹 LIMPIEZA
     # =====================================================
-
-    st.markdown("### 🧹 Limpieza")
 
     df_p["ORDEN"] = df_p["ORDEN"].astype(int)
     df_p = df_p.sort_values("ORDEN")
@@ -68,20 +62,9 @@ if puntos_file and lineas_file:
     df_l["COLINDANTE"] = df_l["NOM_COLINDANTE"].str.strip()
     df_l["COND"] = df_l["OBSERVACIONES"].str.strip()
 
-    st.subheader("📌 Puntos")
-    st.dataframe(df_p[["PUNTO", "NORTE", "ESTE"]])
-
-    st.subheader("📐 Líneas")
-    st.dataframe(df_l[[
-        "ORDEN","LONGITUD","CARDINALDIAD",
-        "COLINDANTE","COND","NPN_COLINDANTE","FMI_COLINDANTE"
-    ]])
-
     # =====================================================
-    # 🔹 FASE 3 — GEOMETRÍA
+    # 🔹 GEOMETRÍA
     # =====================================================
-
-    st.markdown("### 🧭 Tramos y validación")
 
     puntos = df_p["PUNTO"].tolist()
 
@@ -91,7 +74,6 @@ if puntos_file and lineas_file:
     }
 
     tramos = []
-    errores = []
 
     for i in range(len(puntos)):
 
@@ -101,11 +83,8 @@ if puntos_file and lineas_file:
         N1, E1 = coords[p1]
         N2, E2 = coords[p2]
 
-        dist_calc = f1(math.sqrt((N2-N1)**2 + (E2-E1)**2))
+        dist_calc = round(math.sqrt((N2-N1)**2 + (E2-E1)**2), 1)
         dist_tab = df_l.iloc[i]["LONGITUD"]
-
-        dif = f1(abs(dist_calc - dist_tab))
-        estado = "✅ OK" if dif == 0 else "❌ ERROR"
 
         dx = E2 - E1
         dy = N2 - N1
@@ -132,160 +111,125 @@ if puntos_file and lineas_file:
 
         fila = df_l.iloc[i]
 
-        tramo = {
+        tramos.append({
             "INI": p1,
             "FIN": p2,
-            "DIST_CALC": dist_calc,
-            "DIST_TAB": dist_tab,
-            "DIF": dif,
-            "ESTADO": estado,
+            "DIST": dist_calc,
             "SENTIDO": sentido,
             "CARD": fila["CARDINALDIAD"],
-            "COL": fila["COLINDANTE"]
-        }
-
-        tramos.append(tramo)
-
-        if estado == "❌ ERROR":
-            errores.append(tramo)
+            "COL": fila["COLINDANTE"],
+            "COND": fila["OBSERVACIONES"],
+            "NPN": fila["NPN_COLINDANTE"],
+            "FMI": fila["FMI_COLINDANTE"],
+            "TIT": fila["NOMBRE_PREDIO_COL"]
+        })
 
     df_tramos = pd.DataFrame(tramos)
 
-    st.subheader("📐 Tramos")
-    st.dataframe(df_tramos)
+    # =====================================================
+    # 🔹 AGRUPACIÓN
+    # =====================================================
 
-    if errores:
-        st.subheader("🚨 Errores")
-        st.dataframe(pd.DataFrame(errores))
-    else:
-        st.success("✅ Validación OK")
+    bloques = []
+    actual = [df_tramos.iloc[0]]
 
-# =====================================================
-# 🔹 FASE 4 — RTL NARRATIVO COMPLETO
-# =====================================================
+    for i in range(1, len(df_tramos)):
+        t = df_tramos.iloc[i]
+        u = actual[-1]
 
-st.markdown("### 🧾 RTL Narrativo")
+        if (t["CARD"] == u["CARD"] and t["COL"] == u["COL"] and t["SENTIDO"] == u["SENTIDO"]):
+            actual.append(t)
+        else:
+            bloques.append(actual)
+            actual = [t]
 
-salida = "LINDEROS TÉCNICOS\n\n"
+    bloques.append(actual)
 
-# 🔹 base
-orden = df_p["PUNTO"].tolist()
+    # =====================================================
+    # 🔹 RTL NARRATIVO (CONTROL DE ESTILO)
+    # =====================================================
 
-tabla = df_l.to_dict("records")
+    salida = "LINDEROS TÉCNICOS\n\n"
 
-bloques = []
-actual = [df_tramos.iloc[0]]
+    orden = df_p["PUNTO"].tolist()
+    card_actual = None
 
-# -------- AGRUPACIÓN --------
-for i in range(1, len(df_tramos)):
-    t = df_tramos.iloc[i]
-    u = actual[-1]
+    for bloque in bloques:
 
-    if (
-        t["CARD"] == u["CARD"] and
-        t["COL"] == u["COL"] and
-        t["SENTIDO"] == u["SENTIDO"]
-    ):
-        actual.append(t)
-    else:
-        bloques.append(actual)
-        actual = [t]
+        card = bloque[0]["CARD"]
 
-bloques.append(actual)
+        if card != card_actual:
+            salida += f"POR EL {card}:\n\n"
+            card_actual = card
 
-card_actual = None
+        p_ini = bloque[0]["INI"]
+        p_fin = bloque[-1]["FIN"]
 
-# -------- FORMATEO --------
-def f(v):
-    return f"{v:.1f}".replace(".", ",")
+        i1 = orden.index(p_ini)
+        i2 = orden.index(p_fin)
 
-for bloque in bloques:
+        # -------- RUTA --------
+        if i2 > i1:
+            ruta = orden[i1:i2]
+        else:
+            ruta = orden[i1:] + orden[:i2]
 
-    card = bloque[0]["CARD"]
+        # -------- INTERMEDIOS --------
+        if i2 < i1:
+            intermedios = orden[i1+1:] + orden[:i2]
+        else:
+            intermedios = orden[i1+1:i2]
 
-    # -------- ENCABEZADO CARDINAL --------
-    if card != card_actual:
+        tipo = "recta" if len(intermedios) == 0 else "quebrada"
 
-        salida += f"POR EL {card}:\n\n"
-        card_actual = card
+        # -------- TEXTO INTERMEDIO --------
+        texto_int = ""
 
-    salida += "LINDERO:\n"
+        if len(intermedios) == 1:
+            p = intermedios[0]
+            N, E = coords[p]
+            texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
 
-    p_ini = bloque[0]["INI"]
-    p_fin = bloque[-1]["FIN"]
+        elif len(intermedios) > 1:
+            texto_int = "pasando por los puntos de coordenadas "
+            for p in intermedios:
+                N, E = coords[p]
+                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+            texto_int = texto_int.rstrip(", ") + ", "
 
-    i1 = orden.index(p_ini)
-    i2 = orden.index(p_fin)
+        # -------- DISTANCIA --------
+        dist = sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta)
+        dist = f(dist)
 
-    # -------- RUTA --------
-    if i2 > i1:
-        ruta = orden[i1:i2]
-    else:
-        ruta = orden[i1:] + orden[:i2]
+        N_ini, E_ini = coords[p_ini]
+        N_fin, E_fin = coords[p_fin]
 
-    # -------- INTERMEDIOS --------
-    if i2 < i1:
-        intermedios = orden[i1+1:] + orden[:i2]
-    else:
-        intermedios = orden[i1+1:i2]
+        sentido = bloque[0]["SENTIDO"]
 
-    tipo = "recta" if len(intermedios) == 0 else "quebrada"
+        texto = (
+            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
+            f"en línea {tipo}, en sentido {sentido}, "
+        )
 
-    texto_int = ""
+        if texto_int:
+            texto += texto_int
 
-    if len(intermedios) == 1:
-        p2 = intermedios[0]
-        N2, E2 = coords[p2]
-        texto_int = f"pasando por el punto de coordenadas punto {p2} N= {f(N2)} m, E= {f(E2)} m, "
+        texto += (
+            f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} "
+            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
+        )
 
-    elif len(intermedios) > 1:
-        texto_int = "pasando por los puntos de coordenadas "
-        for p2 in intermedios:
-            N2, E2 = coords[p2]
-            texto_int += f"punto {p2} N= {f(N2)} m, E= {f(E2)} m, "
-        texto_int = texto_int.rstrip(", ") + ", "
+        fila = bloque[-1]
 
-    # -------- DISTANCIA TOTAL --------
-    dist = 0
-    for p in ruta:
-        idx = orden.index(p)
-        dist += tabla[idx]["LONGITUD"]
+        texto += f"; colinda con {fila['COL']}"
 
-    dist = f(dist)
+        if str(fila["COND"]).upper() == "TRASLAPA":
+            texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
+        elif str(fila["COND"]).upper() == "CORRESPONDE":
+            texto += f", que corresponde con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
+        else:
+            texto += "."
 
-    # -------- PUNTOS --------
-    N_ini, E_ini = coords[p_ini]
-    N_fin, E_fin = coords[p_fin]
+        salida += texto + "\n\n"
 
-    sentido = bloque[0]["SENTIDO"]
-
-    # -------- REDACCIÓN --------
-    texto_lindero = (
-        f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
-        f"en línea {tipo} en sentido {sentido}, {texto_int}"
-        f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} de coordenadas planas "
-        f"N= {f(N_fin)} m, E= {f(E_fin)} m"
-    )
-
-    # -------- COLINDANTE FINAL --------
-    fila_final = tabla[orden.index(bloque[-1]["INI"])]
-
-    col = bloque[-1]["COL"]
-    cond = fila_final["OBSERVACIONES"]
-    npn = fila_final["NPN_COLINDANTE"]
-    fmi = fila_final["FMI_COLINDANTE"]
-    tit = fila_final["NOMBRE_PREDIO_COL"]
-
-    texto_lindero = texto_lindero.rstrip(".") + f"; colindando con {col}"
-
-    if str(cond).upper() == "TRASLAPA":
-        texto_lindero += f", que traslapa con el Número Predial Nacional {npn}, Folio de Matrícula Inmobiliaria {fmi}, y cuyo titular catastral es {tit}."
-    elif str(cond).upper() == "CORRESPONDE":
-        texto_lindero += f", que corresponde con el Número Predial Nacional {npn}, Folio de Matrícula Inmobiliaria {fmi}, y cuyo titular catastral es {tit}."
-    else:
-        texto_lindero += "."
-
-    salida += texto_lindero + "\n\n"
-
-# -------- MOSTRAR --------
-st.text_area("📄 RESULTADO RTL COMPLETO", salida, height=600)
+    st.text_area("📄 RESULTADO RTL FINAL", salida, height=600)
