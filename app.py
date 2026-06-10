@@ -265,7 +265,19 @@ if puntos_file and lineas_file:
 
         fila = b[-1]
 
-        texto += f"; colinda con {fila['COL']}"
+        col = str(fila["COL"]).strip()
+
+        if col.upper() == "SIN INFORMACION":
+            texto += "; colinda con un elemento sin información definida"
+
+        elif any(x in col.lower() for x in ["rio", "río", "quebrada", "caño"]):
+            texto += f"; colinda con el {col}"
+
+        elif "carretera" in col.lower() or "via" in col.lower():
+            texto += f"; colinda con la {col}"
+
+        else:
+            texto += f"; colinda con {col}"        
 
         if str(fila["COND"]).upper()=="TRASLAPA":
             texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
