@@ -8,11 +8,8 @@ st.title("🧭 RTL–MC PRECISO V2")
 st.markdown("### 1️⃣ Carga de información")
 
 # =========================================================
-# 🔹 FASE 1 — CARGA DE ARCHIVOS
+# 🔹 FUNCIONES
 # =========================================================
-
-puntos_file = st.file_uploader("📌 Cargar tabla de puntos", type=["xlsx", "csv"])
-lineas_file = st.file_uploader("📐 Cargar tabla de líneas", type=["xlsx", "csv"])
 
 def cargar_archivo(file):
     if file.name.endswith(".xlsx"):
@@ -22,6 +19,17 @@ def cargar_archivo(file):
 
     df.columns = df.columns.str.strip()
     return df
+
+# ✅ función de redondeo (1 decimal)
+def f1(x):
+    return round(x, 1)
+
+# =========================================================
+# 🔹 FASE 1 — CARGA
+# =========================================================
+
+puntos_file = st.file_uploader("📌 Cargar tabla de puntos", type=["xlsx", "csv"])
+lineas_file = st.file_uploader("📐 Cargar tabla de líneas", type=["xlsx", "csv"])
 
 # =========================================================
 # 🔹 PROCESO PRINCIPAL
@@ -33,7 +41,7 @@ if puntos_file and lineas_file:
     df_l = cargar_archivo(lineas_file)
 
     # =====================================================
-    # 🔹 FASE 1 — SELECCIÓN DE POLÍGONO
+    # 🔹 SELECCIÓN
     # =====================================================
 
     if "CONSECUTIVO" not in df_p.columns:
@@ -49,12 +57,15 @@ if puntos_file and lineas_file:
 
     st.success(f"✅ Polígono seleccionado: {cons_sel}")
 
-    # Filtrar
+    # =====================================================
+    # 🔹 FILTRADO
+    # =====================================================
+
     df_p_filtrado = df_p[df_p["CONSECUTIVO"] == cons_sel]
     df_l_filtrado = df_l[df_l["CONSECUTIVO"] == cons_sel]
 
     # =====================================================
-    # 🔹 FASE 2 — LIMPIEZA DE DATOS
+    # 🔹 FASE 2 — LIMPIEZA
     # =====================================================
 
     st.markdown("### 🧹 Fase 2 — Limpieza")
@@ -62,7 +73,7 @@ if puntos_file and lineas_file:
     df_p_clean = df_p_filtrado.copy()
     df_l_clean = df_l_filtrado.copy()
 
-    # ---- PUNTOS ----
+    # -------- PUNTOS --------
     df_p_clean["ORDEN"] = df_p_clean["ORDEN"].astype(int)
     df_p_clean = df_p_clean.sort_values("ORDEN")
 
@@ -71,7 +82,7 @@ if puntos_file and lineas_file:
 
     df_p_clean["PUNTO"] = df_p_clean["ORDEN"].astype(str).str.zfill(2)
 
-    # ---- LINEAS ----
+    # -------- LINEAS --------
     df_l_clean["ORDEN"] = df_l_clean["ORDEN"].astype(int)
     df_l_clean = df_l_clean.sort_values("ORDEN")
 
@@ -81,14 +92,14 @@ if puntos_file and lineas_file:
     df_l_clean["CONDICION"] = df_l_clean["OBSERVACIONES"].str.strip()
     df_l_clean["TITULAR"] = df_l_clean["NOMBRE_PREDIO_COL"].str.strip()
 
-    # Validación básica
+    # -------- VALIDACIÓN --------
     st.write(f"📊 Puntos: {len(df_p_clean)}")
     st.write(f"📐 Tramos: {len(df_l_clean)}")
 
     if len(df_p_clean) != len(df_l_clean):
         st.warning("⚠️ cantidad no coincide")
 
-    # Mostrar limpio
+    # -------- MOSTRAR --------
     st.subheader("📌 Puntos limpios")
     st.dataframe(df_p_clean[["PUNTO", "NORTE", "ESTE"]])
 
@@ -109,7 +120,7 @@ if puntos_file and lineas_file:
     )
 
     # =====================================================
-    # 🔹 FASE 3 — GEOMETRÍA (TRAMOS + VALIDACIÓN)
+    # 🔹 FASE 3 — GEOMETRÍA
     # =====================================================
 
     st.markdown("### 🧭 Fase 3 — Construcción geométrica")
@@ -127,20 +138,23 @@ if puntos_file and lineas_file:
     for i in range(len(puntos_lista)):
 
         p1 = puntos_lista[i]
-        p2 = puntos_lista[(i + 1) % len(puntos_lista)]  # cierre
+        p2 = puntos_lista[(i + 1) % len(puntos_lista)]
 
         N1, E1 = coords[p1]
         N2, E2 = coords[p2]
 
-        # Distancia
+        # -------- DISTANCIA --------
         dist_calc = math.sqrt((N2 - N1)**2 + (E2 - E1)**2)
+        dist_calc = f1(dist_calc)
 
         dist_tabla = df_l_clean.iloc[i]["LONGITUD"]
+
         dif = abs(dist_calc - dist_tabla)
+        dif = f1(dif)
 
-        estado = "✅ OK" if dif < 1 else "❌ ERROR"
+        estado = "✅ OK" if dif == 0 else "❌ ERROR"
 
-        # Sentido
+        # -------- SENTIDO --------
         dx = E2 - E1
         dy = N2 - N1
 
@@ -170,9 +184,9 @@ if puntos_file and lineas_file:
         tramo = {
             "PUNTO_INI": p1,
             "PUNTO_FIN": p2,
-            "DIST_CALCULADA": round(dist_calc, 2),
+            "DIST_CALCULADA": dist_calc,
             "DIST_TABLA": dist_tabla,
-            "DIF": round(dif, 2),
+            "DIF": dif,
             "ESTADO": estado,
             "SENTIDO": sentido,
             "CARDINALIDAD": fila["CARDINALDIAD"],
@@ -189,6 +203,7 @@ if puntos_file and lineas_file:
     st.subheader("📐 Tramos calculados")
     st.dataframe(df_tramos)
 
+    # -------- VALIDADOR --------
     if errores:
         st.subheader("🚨 Errores de distancia")
         st.dataframe(pd.DataFrame(errores))
