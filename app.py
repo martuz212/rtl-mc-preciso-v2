@@ -212,42 +212,32 @@ orden = df_p["PUNTO"].tolist()
 card_actual = None
 contador_lindero = 1
 
-for b in bloques:
+    for b in bloques:
 
-    card = b[0]["CARD"]
+        card = b[0]["CARD"]
+    
+        if card != card_actual:
+            salida += f"POR EL {card}:\n\n"
+            card_actual = card
 
-    if card != card_actual:
-        salida += f"POR EL {card}:\n\n"
-        card_actual = card
+        salida += f"Lindero {contador_lindero}:\n"
 
-    salida += f"Lindero {contador_lindero}:\n"
+ # ✅ GEOMETRÍA COMPLETA DEL LINDERO
 
-    for j, tramo in enumerate(b):
-
-        p_ini = tramo["INI"]
-        p_fin = tramo["FIN"]
-
-        N_ini,E_ini = coords[p_ini]
-        N_fin,E_fin = coords[p_fin]
-
-        ang = tramo["ANGULO"]
-        sentido = clasificar_sentido(ang)
+        p_ini = b[0]["INI"]
+        p_fin = b[-1]["FIN"]
 
         i1 = orden.index(p_ini)
         i2 = orden.index(p_fin)
 
         if i2 > i1:
+            inter = orden[i1+1:i2]
             ruta = orden[i1:i2]
         else:
+            inter = orden[i1+1:] + orden[:i2]
             ruta = orden[i1:] + orden[:i2]
 
-        # ✅ INTERMEDIOS CORRECTOS
-        if i2 > i1:
-            inter = orden[i1+1:i2]
-        else:
-            inter = orden[i1+1:] + orden[:i2]
-
-        # ✅ TEXTO INTERMEDIOS
+    # ✅ INTERMEDIOS AGRUPADOS
         texto_int = ""
 
         if len(inter) == 1:
@@ -262,31 +252,46 @@ for b in bloques:
                 texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
             texto_int = texto_int.rstrip(", ") + "; "
 
-        # ✅ DISTANCIA (1 DECIMAL)
+        # ✅ DISTANCIA TOTAL
         dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta),1)
         dist_txt = str(dist).replace(".", ",")
 
-        tipo = "recta" if len(inter) == 0 else "quebrada"
+        # ✅ DETECCIÓN REAL DE QUEBRADA
+        cambios = 0
+        prev_ang = b[0]["ANGULO"]
 
-        # ✅ TEXTO PRINCIPAL
-        if j == 0:
-            texto = (
-                f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                f"en línea {tipo} en sentido {sentido}, "
-                f"{texto_int}"
-                f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
-                f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n\n"
-            )
-        else:
-            texto = (
-                f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                f"en línea {tipo} en sentido {sentido}, "
-                f"{texto_int}"
-                f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
-                f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n\n"
-            )
+        for t in b[1:]:
+            delta = abs(t["ANGULO"] - prev_ang)
+            if delta > 180:
+                delta = 360 - delta
+            if delta > 10:
+                cambios += 1
+            prev_ang = t["ANGULO"]
 
-        salida += texto
+        tipo = "recta" if cambios == 0 else "quebrada"
+
+        # ✅ SENTIDO PROMEDIO
+        sen, cos = 0, 0
+        for t in b:
+            rad = math.radians(t["ANGULO"])
+            sen += math.sin(rad)
+            cos += math.cos(rad)
+
+        ang_bloque = math.degrees(math.atan2(sen, cos)) % 360
+        sentido = clasificar_sentido(ang_bloque)
+
+        N_ini,E_ini = coords[p_ini]
+        N_fin,E_fin = coords[p_fin]
+
+        texto = (
+            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+            f"en línea {tipo} en sentido {sentido}, "
+            f"{texto_int}"
+            f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
+            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n\n"
+        )
+
+    salida += texto
 
     # ✅ COLINDANTE FINAL SOLO UNA VEZ
     fila = b[-1]
