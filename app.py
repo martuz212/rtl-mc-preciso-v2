@@ -205,147 +205,111 @@ if puntos_file and lineas_file:
     st.subheader("📊 Linderos agrupados")
     st.dataframe(pd.DataFrame(info))
 
-
 # =====================================================
-# RTL FINAL
+# RTL FINAL (CON CONTINÚA CORRECTO)
 # =====================================================
 
-    salida = "LINDEROS TÉCNICOS\n\n"
-    orden = df_p["PUNTO"].tolist()
+salida = "LINDEROS TÉCNICOS\n\n"
+orden = df_p["PUNTO"].tolist()
 
-    card_actual = None
+card_actual = None
+contador_lindero = 1
 
-    # ✅ contador de linderos
-    contador_lindero = 1
+for b in bloques:
 
-    for b in bloques:
+    card = b[0]["CARD"]
 
-        card = b[0]["CARD"]
+    if card != card_actual:
+        salida += f"POR EL {card}:\n\n"
+        card_actual = card
 
-        if card != card_actual:
-            salida += f"POR EL {card}:\n\n"
-            card_actual = card
+    salida += f"Lindero {contador_lindero}:\n"
 
-        # ✅ LINDERO
-        salida += f"Lindero {contador_lindero}:\n"
+    for j, tramo in enumerate(b):
 
-        p_ini = b[0]["INI"]
-        p_fin = b[-1]["FIN"]
+        p_ini = tramo["INI"]
+        p_fin = tramo["FIN"]
 
-        # ---------------- sentido promedio
-        sen,cos = 0,0
-        for t in b:
-            ang_rad = math.radians(t["ANGULO"])
-            sen += math.sin(ang_rad)
-            cos += math.cos(ang_rad)
+        N_ini,E_ini = coords[p_ini]
+        N_fin,E_fin = coords[p_fin]
 
-        ang = math.degrees(math.atan2(sen, cos)) % 360
+        ang = tramo["ANGULO"]
         sentido = clasificar_sentido(ang)
 
         i1 = orden.index(p_ini)
         i2 = orden.index(p_fin)
 
-        ruta = orden[i1:i2] if i2 > i1 else orden[i1:] + orden[:i2]
+        if i2 > i1:
+            ruta = orden[i1:i2]
+        else:
+            ruta = orden[i1:] + orden[:i2]
 
-        tipo = "recta" if len(b) == 1 else "quebrada"
+        # ✅ INTERMEDIOS CORRECTOS
+        if i2 > i1:
+            inter = orden[i1+1:i2]
+        else:
+            inter = orden[i1+1:] + orden[:i2]
 
-        # =====================================================
-        # ✅ CONTINÚA + CONTROL SINGULAR/PLURAL
-        # =====================================================
-
+        # ✅ TEXTO INTERMEDIOS
         texto_int = ""
-        prev_ang = None
-        buffer_pts = []
 
-        def formatear_buffer(buffer):
-            """Devuelve texto correcto según cantidad de puntos"""
-            if len(buffer) == 1:
-                p = buffer[0]
+        if len(inter) == 1:
+            p = inter[0]
+            N,E = coords[p]
+            texto_int = f"pasando por el punto de coordenadas; punto {p} N= {f(N)} m, E= {f(E)} m; "
+
+        elif len(inter) > 1:
+            texto_int = "pasando por los puntos de coordenadas "
+            for p in inter:
                 N,E = coords[p]
-                return f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-            elif len(buffer) > 1:
-                txt = "pasando por los puntos de coordenadas "
-                for p in buffer:
-                    N,E = coords[p]
-                    txt += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-                return txt
-            return ""
+                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+            texto_int = texto_int.rstrip(", ") + "; "
 
-        for i, tramo in enumerate(b):
+        # ✅ DISTANCIA (1 DECIMAL)
+        dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta),1)
+        dist_txt = str(dist).replace(".", ",")
 
-            p = tramo["FIN"]
-            ang_tramo = tramo["ANGULO"]
-            sentido_tramo = clasificar_sentido(ang_tramo)
+        tipo = "recta" if len(inter) == 0 else "quebrada"
 
-            if i == 0:
-                prev_ang = ang_tramo
-                continue
-
-            delta = abs(ang_tramo - prev_ang)
-            if delta > 180:
-                delta = 360 - delta
-
-            # ✅ acumular puntos
-            buffer_pts.append(p)
-
-            if delta > 20:
-                # 🔥 imprimir buffer anterior
-                texto_int += formatear_buffer(buffer_pts)
-
-                # 🔥 continúa con nuevo sentido
-                texto_int += f"continúa en sentido {sentido_tramo}, "
-
-                buffer_pts = []
-
-            prev_ang = ang_tramo
-
-        # ✅ imprimir último buffer
-        if buffer_pts:
-            texto_int += formatear_buffer(buffer_pts)
-
-        if texto_int != "":
-            texto_int = texto_int.rstrip(", ") + ", "
-
-        # -----------------------------------------------------
-
-        dist = f(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta))
-
-        N_ini,E_ini = coords[p_ini]
-        N_fin,E_fin = coords[p_fin]
-
-        texto = (
-            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m; "
-            f"en línea {tipo}, en sentido {sentido}, {texto_int}"
-            f"en una distancia de {dist} m, hasta encontrar el punto número {p_fin} "
-            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
-        )
-
-        fila = b[-1]
-
-        col = str(fila["COL"]).strip()
-
-        if col.upper() == "SIN INFORMACION":
-            texto += "; colinda con un elemento sin información definida"
-
-        elif any(x in col.lower() for x in ["rio", "río", "quebrada", "caño"]):
-            texto += f"; colinda con el {col}"
-
-        elif "carretera" in col.lower() or "via" in col.lower():
-            texto += f"; colinda con la {col}"
-
+        # ✅ TEXTO PRINCIPAL
+        if j == 0:
+            texto = (
+                f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+                f"en línea {tipo} en sentido {sentido}, "
+                f"{texto_int}"
+                f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
+                f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n\n"
+            )
         else:
-            texto += f"; colinda con {col}"
+            texto = (
+                f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+                f"en línea {tipo} en sentido {sentido}, "
+                f"{texto_int}"
+                f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
+                f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n\n"
+            )
 
-        if str(fila["COND"]).upper() == "TRASLAPA":
-            texto += f", que traslapa con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
-        elif str(fila["COND"]).upper() == "CORRESPONDE":
-            texto += f", que corresponde con el Número Predial Nacional {fila['NPN']}, Folio de Matrícula Inmobiliaria {fila['FMI']}, y cuyo titular catastral es {fila['TIT']}."
-        else:
-            texto += "."
+        salida += texto
 
-        salida += texto + "\n\n"
+    # ✅ COLINDANTE FINAL SOLO UNA VEZ
+    fila = b[-1]
 
-        # ✅ incremento
-        contador_lindero += 1
+    texto_col = f"; colindando con {fila['COL']}, "
 
-    st.text_area("📄 RTL FINAL", salida, height=600)
+    if str(fila["COND"]).upper() == "TRASLAPA":
+        texto_col += f"que traslapa con el Numero Predial nacional {fila['NPN']}, "
+    elif str(fila["COND"]).upper() == "CORRESPONDE":
+        texto_col += f"que corresponde con el Numero Predial nacional {fila['NPN']}, "
+
+    texto_col += f"Folio de matrícula inmobiliaria {fila['FMI']} "
+
+    texto_col += f"y catastralmente a nombre de {fila['TIT']}."
+
+    salida += texto_col + "\n\n"
+
+    contador_lindero += 1
+
+# ✅ CIERRE FINAL
+salida = salida.strip() + " y encierra"
+
+st.text_area("📄 RTL FINAL", salida, height=600)
