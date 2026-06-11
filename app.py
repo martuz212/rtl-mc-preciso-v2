@@ -203,7 +203,7 @@ if puntos_file and lineas_file:
     st.dataframe(pd.DataFrame(info))
 
 # =====================================================
-# RTL FINAL (CORREGIDO)
+# RTL FINAL (DEFINITIVO CORREGIDO)
 # =====================================================
 
 salida = "LINDEROS TÉCNICOS\n\n"
@@ -255,7 +255,7 @@ for b in bloques:
     dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta), 1)
     dist_txt = str(dist).replace(".", ",")
 
-    # ✅ DETECCIÓN REAL DE QUEBRADA
+    # ✅ DETECCIÓN REAL DE RECTA / QUEBRADA
     cambios = 0
     prev_ang = b[0]["ANGULO"]
 
@@ -269,7 +269,7 @@ for b in bloques:
 
     tipo = "recta" if cambios == 0 else "quebrada"
 
-    # ✅ SENTIDO PROMEDIO
+    # ✅ SENTIDO PROMEDIO DEL BLOQUE
     sen, cos = 0, 0
     for t in b:
         rad = math.radians(t["ANGULO"])
