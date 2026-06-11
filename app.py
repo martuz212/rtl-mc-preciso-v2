@@ -226,12 +226,13 @@ if puntos_file and lineas_file:
             salida += f"POR EL {card}:\n\n"
             card_actual = card
 
-        # ✅ LINDERO (correctamente ubicado)
+        # ✅ LINDERO
         salida += f"Lindero {contador_lindero}:\n"
 
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
+        # ---------------- sentido promedio (NO se toca)
         sen,cos = 0,0
         for t in b:
             ang_rad = math.radians(t["ANGULO"])
@@ -245,17 +246,49 @@ if puntos_file and lineas_file:
         i2 = orden.index(p_fin)
 
         ruta = orden[i1:i2] if i2 > i1 else orden[i1:] + orden[:i2]
-        inter = orden[i1+1:i2] if i2 > i1 else orden[i1+1:] + orden[:i2]
 
-        tipo = "recta" if len(inter) == 0 else "quebrada"
+        tipo = "recta" if len(b) == 1 else "quebrada"
+
+        # =====================================================
+        # ✅ CONTINÚA 
+        # =====================================================
 
         texto_int = ""
-        if len(inter) > 0:
-            texto_int = "pasando por los puntos de coordenadas "
-            for p in inter:
-                N,E = coords[p]
-                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+        prev_ang = None
+
+        for i, tramo in enumerate(b):
+
+            p = tramo["FIN"]
+            N, E = coords[p]
+
+            ang_tramo = tramo["ANGULO"]
+            sentido_tramo = clasificar_sentido(ang_tramo)
+
+            if i == 0:
+                prev_ang = ang_tramo
+                continue
+
+            delta = abs(ang_tramo - prev_ang)
+            if delta > 180:
+                delta = 360 - delta
+
+            if delta > 20:
+                texto_int += (
+                    f"continúa en sentido {sentido_tramo}, "
+                    f"pasando por el punto de coordenadas punto {p} "
+                    f"N= {f(N)} m, E= {f(E)} m, "
+                )
+            else:
+                texto_int += (
+                    f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+                )
+
+            prev_ang = ang_tramo
+
+        if texto_int != "":
             texto_int = texto_int.rstrip(", ") + ", "
+
+        # -----------------------------------------------------
 
         dist = f(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta))
 
@@ -294,7 +327,7 @@ if puntos_file and lineas_file:
 
         salida += texto + "\n\n"
 
-        # ✅ incremento correcto
+        # ✅ incremento
         contador_lindero += 1
 
     st.text_area("📄 RTL FINAL", salida, height=600)
