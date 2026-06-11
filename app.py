@@ -232,7 +232,7 @@ if puntos_file and lineas_file:
         p_ini = b[0]["INI"]
         p_fin = b[-1]["FIN"]
 
-        # ---------------- sentido promedio (NO se toca)
+        # ---------------- sentido promedio
         sen,cos = 0,0
         for t in b:
             ang_rad = math.radians(t["ANGULO"])
@@ -250,17 +250,30 @@ if puntos_file and lineas_file:
         tipo = "recta" if len(b) == 1 else "quebrada"
 
         # =====================================================
-        # ✅ CONTINÚA 
+        # ✅ CONTINÚA + CONTROL SINGULAR/PLURAL
         # =====================================================
 
         texto_int = ""
         prev_ang = None
+        buffer_pts = []
+
+        def formatear_buffer(buffer):
+            """Devuelve texto correcto según cantidad de puntos"""
+            if len(buffer) == 1:
+                p = buffer[0]
+                N,E = coords[p]
+                return f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
+            elif len(buffer) > 1:
+                txt = "pasando por los puntos de coordenadas "
+                for p in buffer:
+                    N,E = coords[p]
+                    txt += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+                return txt
+            return ""
 
         for i, tramo in enumerate(b):
 
             p = tramo["FIN"]
-            N, E = coords[p]
-
             ang_tramo = tramo["ANGULO"]
             sentido_tramo = clasificar_sentido(ang_tramo)
 
@@ -272,18 +285,23 @@ if puntos_file and lineas_file:
             if delta > 180:
                 delta = 360 - delta
 
+            # ✅ acumular puntos
+            buffer_pts.append(p)
+
             if delta > 20:
-                texto_int += (
-                    f"continúa en sentido {sentido_tramo}, "
-                    f"pasando por el punto de coordenadas punto {p} "
-                    f"N= {f(N)} m, E= {f(E)} m, "
-                )
-            else:
-                texto_int += (
-                    f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-                )
+                # 🔥 imprimir buffer anterior
+                texto_int += formatear_buffer(buffer_pts)
+
+                # 🔥 continúa con nuevo sentido
+                texto_int += f"continúa en sentido {sentido_tramo}, "
+
+                buffer_pts = []
 
             prev_ang = ang_tramo
+
+        # ✅ imprimir último buffer
+        if buffer_pts:
+            texto_int += formatear_buffer(buffer_pts)
 
         if texto_int != "":
             texto_int = texto_int.rstrip(", ") + ", "
