@@ -145,30 +145,30 @@ if puntos_file and lineas_file:
 
     df_tramos = pd.DataFrame(tramos)
 
-# =====================================================
-# QUIEBRES CORREGIDO (CRITERIO JURÍDICO)
-# =====================================================
+    # =====================================================
+    # QUIEBRES CORREGIDO (CRITERIO JURÍDICO)
+    # =====================================================
 
-bloques = []
-actual = [df_tramos.iloc[0]]
+    bloques = []
+    actual = [df_tramos.iloc[0]]
 
-for i in range(1, len(df_tramos)):
+        for i in range(1, len(df_tramos)):
 
-    t = df_tramos.iloc[i]
-    u = actual[-1]
+        t = df_tramos.iloc[i]
+        u = actual[-1]
 
-    if (
-        t["CARD"] == u["CARD"] and
-        t["COL"] == u["COL"] and
-        str(t["NPN"]).strip() == str(u["NPN"]).strip() and
-        str(t["FMI"]).strip() == str(u["FMI"]).strip()
-    ):
-        actual.append(t)
-    else:
-        bloques.append(actual)
-        actual = [t]
+        if (
+            t["CARD"] == u["CARD"] and
+            t["COL"] == u["COL"] and
+            str(t["NPN"]).strip() == str(u["NPN"]).strip() and
+            str(t["FMI"]).strip() == str(u["FMI"]).strip()
+        ):
+            actual.append(t)
+        else:
+            bloques.append(actual)
+            actual = [t]
 
-bloques.append(actual)
+    bloques.append(actual)
 
     # =====================================================
     # TABLAS
