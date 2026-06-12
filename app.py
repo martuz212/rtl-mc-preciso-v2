@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import math
 import matplotlib.pyplot as plt
+import plotly.express as px  # <-- Nueva librería para el gráfico dinámico
 
 st.set_page_config(page_title="RTL–MC PRECISO PRO", layout="wide")
 st.title("🧭 RTL–MC PRECISO PRO")
-
 # =========================================================
 # FUNCIONES
 # =========================================================
