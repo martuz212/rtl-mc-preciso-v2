@@ -335,4 +335,3 @@ if puntos_file and lineas_file:
         salida += f" y catastralmente a nombre de {fila['TIT']}.\n\n"
 
         contador_lindero += 1
-``
