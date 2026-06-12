@@ -3,6 +3,7 @@ import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import plotly.express as px  # <-- Nueva librería para el gráfico dinámico
+from pyproj import Transformer  # <-- NUEVA: Para convertir CTM12 a Lat/Lon
 
 st.set_page_config(page_title="RTL–MC PRECISO PRO", layout="wide")
 st.title("🧭 RTL–MC PRECISO PRO")
@@ -77,56 +78,71 @@ if puntos_file and lineas_file:
     coords = {r["PUNTO"]: (r["NORTE"], r["ESTE"]) for _, r in df_p.iterrows()}
 
     # =====================================================
-    # VISUALIZACIÓN DINÁMICA (NUEVO CON PLOTLY)
+    # CONVERSIÓN DE CTM12 A COORDENADAS GEOGRÁFICAS
+    # =====================================================
+    
+    # Definimos el transformador de EPSG:9377 (CTM12) a EPSG:4326 (WGS84 / Lat-Lon)
+    # always_xy=True hace que reciba (Este, Norte) y devuelva (Longitud, Latitud)
+    transformer = Transformer.from_crs("EPSG:9377", "EPSG:4326", always_xy=True)
+    
+    lons, lats = transformer.transform(df_p["ESTE"].values, df_p["NORTE"].values)
+    df_p["LONGITUD_GEO"] = lons
+    df_p["LATITUD_GEO"] = lats
+
+    # =====================================================
+    # VISUALIZACIÓN EN MAPA SATELITAL (ESTILO GOOGLE EARTH)
     # =====================================================
 
-    st.markdown("### 🗺️ Visualización Dinámica del Polígono")
+    import plotly.graph_objects as go
 
-    # Duplicamos temporalmente los puntos para cerrar el polígono visual en el gráfico
-    df_plot = df_p.copy()
-    first_point = df_plot.iloc[[0]]
-    df_plot_closed = pd.concat([df_plot, first_point], ignore_index=True)
+    st.markdown("### 🌍 Vista Satelital del Predio (Conversión CTM12)")
+    
+    # Duplicar el primer punto para cerrar el perímetro en el mapa
+    df_geo_closed = pd.concat([df_p, df_p.iloc[[0]]], ignore_index=True)
+    
+    # Calcular el centro geográfico del lote para enfocar la cámara
+    centro_lat = df_p["LATITUD_GEO"].mean()
+    centro_lon = df_p["LONGITUD_GEO"].mean()
 
-    # Crear gráfico interactivo
-    fig = px.scatter(
-        df_plot_closed,
-        x="ESTE",
-        y="NORTE",
-        text="PUNTO",
-        hover_data=["PUNTO", "NORTE", "ESTE"]
+    fig_mapa = go.Figure()
+
+    # 1. Dibujar el contorno del lindero (Línea roja)
+    fig_mapa.add_trace(go.Scattermapbox(
+        lat=df_geo_closed["LATITUD_GEO"],
+        lon=df_geo_closed["LONGITUD_GEO"],
+        mode='lines',
+        line=dict(width=3, color='#FF2222'),
+        name="Linderos",
+        hoverinfo='skip'
+    ))
+
+    # 2. Dibujar los vértices del predio con su nomenclatura numérica
+    fig_mapa.add_trace(go.Scattermapbox(
+        lat=df_p["LATITUD_GEO"],
+        lon=df_p["LONGITUD_GEO"],
+        mode='markers+text',
+        marker=dict(size=10, color='#00FFFF', opacity=0.9),
+        text=df_p["PUNTO"],
+        textposition="top right",
+        textfont=dict(size=12, color='white', weight='bold'),
+        hovertemplate="<b>Vértice: %{text}</b><br>Norte: %{customdata[0]:,.2f}<br>Este: %{customdata[1]:,.2f}<extra></extra>",
+        customdata=df_p[["NORTE", "ESTE"]],
+        name="Vértices"
+    ))
+
+    # 3. Configurar la interfaz de Mapbox con fondo Satelital
+    fig_mapa.update_layout(
+        mapbox=dict(
+            style="satellite-streets",
+            center=dict(lat=centro_lat, lon=centro_lon),
+            zoom=17 # Zoom optimizado para ver predios rurales/urbanos intermedios
+        ),
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=600,
+        showlegend=False
     )
-
-    # Estilo de líneas, vértices y etiquetas
-    fig.update_traces(
-        mode='lines+markers+text',
-        marker=dict(size=9, symbol='circle', color='#1f77b4', line=dict(width=1, color='DarkSlateGrey')),
-        line=dict(color='#ff7f0e', width=3),
-        textposition='top right',
-        textfont=dict(size=11, color='black'),
-        selector=dict(type='scatter')
-    )
-
-    # Ajustes de diseño y Relación de Aspecto 1:1 (Evita distorsión topográfica)
-    fig.update_layout(
-        title_text=f"Polígono del Predio - Consecutivo: {cons}",
-        xaxis=dict(tickformat=",.1f", title_text="Este (X) [m]"),
-        yaxis=dict(tickformat=",.1f", title_text="Norte (Y) [m]", scaleanchor="x", scaleratio=1),
-        margin=dict(l=40, r=40, b=40, t=80),
-        paper_bgcolor="#f8f9fb",
-        plot_bgcolor="white",
-        hovermode="closest",
-        dragmode='pan'
-    )
-
-    # Configuración de herramientas del gráfico
-    config = {
-        'displaylogo': False,
-        'modeBarButtonsToRemove': ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines'],
-        'scrollZoom': True
-    }
-
-    # Desplegar en Streamlit
-    st.plotly_chart(fig, use_container_width=True, config=config)
+    
+    st.plotly_chart(fig_mapa, use_container_width=True)
 
     # =====================================================
     # TRAMOS
