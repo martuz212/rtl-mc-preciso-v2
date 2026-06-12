@@ -177,161 +177,113 @@ if puntos_file and lineas_file:
     st.subheader("📐 Tramos técnicos")
     st.dataframe(df_tramos)
 
-    # =====================================================
-    # RTL FINAL (CONTINÚA CORRECTO SIN ROMPER LINDEROS)
-    # =====================================================
+# =====================================================
+# RTL FINAL (DEFINITIVO CORREGIDO)
+# =====================================================
 
-    salida = "LINDEROS TÉCNICOS\n\n"
-    orden = df_p["PUNTO"].tolist()
+salida = "LINDEROS TÉCNICOS\n\n"
+orden = df_p["PUNTO"].tolist()
 
-    card_actual = None
-    contador_lindero = 1
+card_actual = None
+contador_lindero = 1
 
-    for b in bloques:
+for b in bloques:
 
-        card = b[0]["CARD"]
+    card = b[0]["CARD"]
 
-        if card != card_actual:
-            salida += f"POR EL {card}:\n\n"
-            card_actual = card
+    if card != card_actual:
+        salida += f"POR EL {card}:\n\n"
+        card_actual = card
 
-        salida += f"Lindero {contador_lindero}:\n"
+    salida += f"Lindero {contador_lindero}:\n"
 
-        primera_linea = True
-        segmento = [b[0]]
+    # ✅ GEOMETRÍA COMPLETA DEL LINDERO
+    p_ini = b[0]["INI"]
+    p_fin = b[-1]["FIN"]
 
-        for t in b[1:]:
+    i1 = orden.index(p_ini)
+    i2 = orden.index(p_fin)
 
-            prev = segmento[-1]
+    if i2 > i1:
+        inter = orden[i1+1:i2]
+        ruta = orden[i1:i2]
+    else:
+        inter = orden[i1+1:] + orden[:i2]
+        ruta = orden[i1:] + orden[:i2]
 
-            delta = abs(t["ANGULO"] - prev["ANGULO"])
-            if delta > 180:
-                delta = 360 - delta
+    # ✅ INTERMEDIOS AGRUPADOS
+    texto_int = ""
 
-            if delta > 20:
-                # ✅ IMPRIME SEGMENTO
-                p_ini = segmento[0]["INI"]
-                p_fin = segmento[-1]["FIN"]
+    if len(inter) == 1:
+        p = inter[0]
+        N, E = coords[p]
+        texto_int = f"pasando por el punto de coordenadas; punto {p} N= {f(N)} m, E= {f(E)} m; "
 
-                i1 = orden.index(p_ini)
-                i2 = orden.index(p_fin)
+    elif len(inter) > 1:
+        texto_int = "pasando por los puntos de coordenadas "
+        for p in inter:
+            N, E = coords[p]
+            texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+        texto_int = texto_int.rstrip(", ") + "; "
 
-                if i2 > i1:
-                    inter = orden[i1+1:i2]
-                    ruta = orden[i1:i2]
-                else:
-                    inter = orden[i1+1:] + orden[:i2]
-                    ruta = orden[i1:] + orden[:i2]
+    # ✅ DISTANCIA TOTAL
+    dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta), 1)
+    dist_txt = str(dist).replace(".", ",")
 
-                texto_int = ""
+    # ✅ DETECCIÓN REAL DE RECTA / QUEBRADA
+    cambios = 0
+    prev_ang = b[0]["ANGULO"]
 
-                if len(inter) == 1:
-                    p = inter[0]
-                    N,E = coords[p]
-                    texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-                elif len(inter) > 1:
-                    texto_int = "pasando por los puntos de coordenadas "
-                    for p in inter:
-                        N,E = coords[p]
-                        texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+    for t in b[1:]:
+        delta = abs(t["ANGULO"] - prev_ang)
+        if delta > 180:
+            delta = 360 - delta
+        if delta > 10:
+            cambios += 1
+        prev_ang = t["ANGULO"]
 
-                dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta),1)
-                dist_txt = str(dist).replace(".", ",")
+    tipo = "recta" if cambios == 0 else "quebrada"
 
-                tipo = "recta" if len(segmento)==1 else "quebrada"
-                sentido = clasificar_sentido(segmento[0]["ANGULO"])
+    # ✅ SENTIDO PROMEDIO DEL BLOQUE
+    sen, cos = 0, 0
+    for t in b:
+        rad = math.radians(t["ANGULO"])
+        sen += math.sin(rad)
+        cos += math.cos(rad)
 
-                N_ini,E_ini = coords[p_ini]
-                N_fin,E_fin = coords[p_fin]
+    ang_bloque = math.degrees(math.atan2(sen, cos)) % 360
+    sentido = clasificar_sentido(ang_bloque)
 
-                if primera_linea:
-                    salida += (
-                        f"Inicia en el punto número {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
-                    primera_linea = False
-                else:
-                    salida += (
-                        f"Continúa en el punto número {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
+    N_ini, E_ini = coords[p_ini]
+    N_fin, E_fin = coords[p_fin]
 
-                segmento = [t]
+    # ✅ TEXTO PRINCIPAL
+    texto = (
+        f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+        f"en línea {tipo} en sentido {sentido}, "
+        f"{texto_int}"
+        f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
+        f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
+    )
 
-            else:
-                segmento.append(t)
+    salida += texto
 
-        # ✅ ÚLTIMO SEGMENTO
-        if segmento:
+    # ✅ COLINDANTE FINAL (MISMA LÍNEA)
+    fila = b[-1]
 
-            p_ini = segmento[0]["INI"]
-            p_fin = segmento[-1]["FIN"]
+    salida += f"; colindando con {fila['COL']}"
 
-            i1 = orden.index(p_ini)
-            i2 = orden.index(p_fin)
+    if str(fila["COND"]).upper() == "TRASLAPA":
+        salida += f", que traslapa con el Numero Predial nacional {fila['NPN']}"
+    elif str(fila["COND"]).upper() == "CORRESPONDE":
+        salida += f", que corresponde con el Numero Predial nacional {fila['NPN']}"
 
-            if i2 > i1:
-                inter = orden[i1+1:i2]
-                ruta = orden[i1:i2]
-            else:
-                inter = orden[i1+1:] + orden[:i2]
-                ruta = orden[i1:] + orden[:i2]
+    salida += f", Folio de matrícula inmobiliaria {fila['FMI']}"
+    salida += f" y catastralmente a nombre de {fila['TIT']}.\n\n"
 
-            texto_int = ""
+    contador_lindero += 1
 
-            if len(inter) == 1:
-                p = inter[0]
-                N,E = coords[p]
-                texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-            elif len(inter) > 1:
-                texto_int = "pasando por los puntos de coordenadas "
-                for p in inter:
-                    N,E = coords[p]
-                    texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+# ✅ CIERRE FINAL
+salida = salida.strip() + " y encierra"
 
-            dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta),1)
-            dist_txt = str(dist).replace(".", ",")
-
-            tipo = "recta" if len(segmento)==1 else "quebrada"
-            sentido = clasificar_sentido(segmento[0]["ANGULO"])
-
-            N_ini,E_ini = coords[p_ini]
-            N_fin,E_fin = coords[p_fin]
-
-            if primera_linea:
-                salida += (
-                    f"Inicia en el punto número {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                    f"en línea {tipo} en sentido {sentido}, "
-                    f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
-                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                )
-            else:
-                salida += (
-                    f"Continúa en el punto número {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                    f"en línea {tipo} en sentido {sentido}, "
-                    f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
-                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                )
-
-        # ✅ COLINDANTE SOLO UNA VEZ
-        fila = b[-1]
-
-        salida += f"; colindando con {fila['COL']}"
-
-        if str(fila["COND"]).upper() == "TRASLAPA":
-            salida += f", que traslapa con el Numero Predial nacional {fila['NPN']}"
-        elif str(fila["COND"]).upper() == "CORRESPONDE":
-            salida += f", que corresponde con el Numero Predial nacional {fila['NPN']}"
-
-        salida += f", Folio de matrícula inmobiliaria {fila['FMI']}"
-        salida += f" y catastralmente a nombre de {fila['TIT']}.\n\n"
-
-        contador_lindero += 1
+st.text_area("📄 RTL FINAL", salida, height=600)
