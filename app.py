@@ -45,7 +45,6 @@ def clasificar_sentido(ang):
 
 puntos_file = st.file_uploader("📌 Tabla de puntos", type=["xlsx", "csv"])
 lineas_file = st.file_uploader("📐 Tabla de líneas", type=["xlsx", "csv"])
-
 # =========================================================
 # PROCESO
 # =========================================================
@@ -78,28 +77,56 @@ if puntos_file and lineas_file:
     coords = {r["PUNTO"]: (r["NORTE"], r["ESTE"]) for _, r in df_p.iterrows()}
 
     # =====================================================
-    # VISUALIZACIÓN
+    # VISUALIZACIÓN DINÁMICA (NUEVO CON PLOTLY)
     # =====================================================
 
-    st.markdown("### 🗺️ Visualización del polígono")
+    st.markdown("### 🗺️ Visualización Dinámica del Polígono")
 
-    x, y = [], []
+    # Duplicamos temporalmente los puntos para cerrar el polígono visual en el gráfico
+    df_plot = df_p.copy()
+    first_point = df_plot.iloc[[0]]
+    df_plot_closed = pd.concat([df_plot, first_point], ignore_index=True)
 
-    for p in puntos:
-        N, E = coords[p]
-        x.append(E)
-        y.append(N)
+    # Crear gráfico interactivo
+    fig = px.scatter(
+        df_plot_closed,
+        x="ESTE",
+        y="NORTE",
+        text="PUNTO",
+        hover_data=["PUNTO", "NORTE", "ESTE"]
+    )
 
-    x.append(x[0])
-    y.append(y[0])
+    # Estilo de líneas, vértices y etiquetas
+    fig.update_traces(
+        mode='lines+markers+text',
+        marker=dict(size=9, symbol='circle', color='#1f77b4', line=dict(width=1, color='DarkSlateGrey')),
+        line=dict(color='#ff7f0e', width=3),
+        textposition='top right',
+        textfont=dict(size=11, color='black'),
+        selector=dict(type='scatter')
+    )
 
-    fig, ax = plt.subplots()
-    ax.plot(x, y, marker='o')
+    # Ajustes de diseño y Relación de Aspecto 1:1 (Evita distorsión topográfica)
+    fig.update_layout(
+        title_text=f"Polígono del Predio - Consecutivo: {cons}",
+        xaxis=dict(tickformat=",.1f", title_text="Este (X) [m]"),
+        yaxis=dict(tickformat=",.1f", title_text="Norte (Y) [m]", scaleanchor="x", scaleratio=1),
+        margin=dict(l=40, r=40, b=40, t=80),
+        paper_bgcolor="#f8f9fb",
+        plot_bgcolor="white",
+        hovermode="closest",
+        dragmode='pan'
+    )
 
-    for i, p in enumerate(puntos):
-        ax.text(x[i], y[i], p)
+    # Configuración de herramientas del gráfico
+    config = {
+        'displaylogo': False,
+        'modeBarButtonsToRemove': ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines'],
+        'scrollZoom': True
+    }
 
-    st.pyplot(fig)
+    # Desplegar en Streamlit
+    st.plotly_chart(fig, use_container_width=True, config=config)
 
     # =====================================================
     # TRAMOS
@@ -177,7 +204,7 @@ if puntos_file and lineas_file:
     st.dataframe(df_tramos)
 
     # =====================================================
-    # RTL FINAL (CONTINÚA IGAC REAL)
+    # RTL FINAL (CORRECTO)
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
@@ -196,140 +223,50 @@ if puntos_file and lineas_file:
 
         salida += f"Lindero {contador_lindero}:\n"
 
-        segmento = [b[0]]
-        primera = True
+        p_ini = b[0]["INI"]
+        p_fin = b[-1]["FIN"]
 
-        for t in b[1:]:
+        i1 = orden.index(p_ini)
+        i2 = orden.index(p_fin)
 
-            prev = segmento[-1]
+        if i2 > i1:
+            inter = orden[i1+1:i2]
+            ruta = orden[i1:i2]
+        else:
+            inter = orden[i1+1:] + orden[:i2]
+            ruta = orden[i1:] + orden[:i2]
 
-            delta = abs(t["ANGULO"] - prev["ANGULO"])
-            if delta > 180:
-                delta = 360 - delta
+        texto_int = ""
 
-            dist_acum = sum(x["DIST_TAB"] for x in segmento)
-# ✅ REGLA IGAC AJUSTADA (EVITA SOBRE-FRAGMENTACIÓN)
+        if len(inter) == 1:
+            p = inter[0]
+            N, E = coords[p]
+            texto_int = f"pasando por el punto de coordenadas; punto {p} N= {f(N)} m, E= {f(E)} m; "
 
-            cond_quiebre = delta > 15
-            cond_longitud = dist_acum > 300
-            cond_densidad = len(segmento) >= 5
+        elif len(inter) > 1:
+            texto_int = "pasando por los puntos de coordenadas "
+            for p in inter:
+                N, E = coords[p]
+                texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+            texto_int = texto_int.rstrip(", ") + "; "
 
-            if cond_longitud or cond_densidad or (cond_quiebre and dist_acum > 120):
+        dist = round(sum(df_l.iloc[orden.index(p)]["LONGITUD"] for p in ruta), 1)
+        dist_txt = str(dist).replace(".", ",")
 
-                p_ini = segmento[0]["INI"]
-                p_fin = segmento[-1]["FIN"]
+        tipo = "recta" if len(inter) == 0 else "quebrada"
+        sentido = clasificar_sentido(b[0]["ANGULO"])
 
-                i1 = orden.index(p_ini)
-                i2 = orden.index(p_fin)
+        N_ini, E_ini = coords[p_ini]
+        N_fin, E_fin = coords[p_fin]
 
-                if i2 > i1:
-                    inter = orden[i1+1:i2]
-                    ruta = orden[i1:i2]
-                else:
-                    inter = orden[i1+1:] + orden[:i2]
-                    ruta = orden[i1:] + orden[:i2]
+        salida += (
+            f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+            f"en línea {tipo} en sentido {sentido}, "
+            f"{texto_int}"
+            f"en una distancia de {dist_txt} m, hasta encontrar el punto número {p_fin} "
+            f"de coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m"
+        )
 
-                texto_int = ""
-
-                if len(inter) == 1:
-                    p = inter[0]
-                    N,E = coords[p]
-                    texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-                elif len(inter) > 1:
-                    texto_int = "pasando por los puntos de coordenadas "
-                    for p in inter:
-                        N,E = coords[p]
-                        texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-                dist = round(sum(x["DIST_TAB"] for x in segmento), 1)
-                dist_txt = str(dist).replace(".", ",")
-
-                tipo = "recta" if len(segmento) == 1 else "quebrada"
-                sentido = clasificar_sentido(segmento[0]["ANGULO"])
-
-                N_ini,E_ini = coords[p_ini]
-                N_fin,E_fin = coords[p_fin]
-
-                if primera:
-                    salida += (
-                        f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
-                    primera = False
-                else:
-                    salida += (
-                        f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
-
-                segmento = [t]
-
-            else:
-                segmento.append(t)
-
-        # ✅ ÚLTIMO SEGMENTO
-        if segmento:
-
-            p_ini = segmento[0]["INI"]
-            p_fin = segmento[-1]["FIN"]
-
-            i1 = orden.index(p_ini)
-            i2 = orden.index(p_fin)
-
-            if i2 > i1:
-                inter = orden[i1+1:i2]
-                ruta = orden[i1:i2]
-            else:
-                inter = orden[i1+1:] + orden[:i2]
-                ruta = orden[i1:] + orden[:i2]
-
-            texto_int = ""
-
-            if len(inter) == 1:
-                p = inter[0]
-                N,E = coords[p]
-                texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-            elif len(inter) > 1:
-                texto_int = "pasando por los puntos de coordenadas "
-                for p in inter:
-                    N,E = coords[p]
-                    texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-            dist = round(sum(x["DIST_TAB"] for x in segmento), 1)
-            dist_txt = str(dist).replace(".", ",")
-
-            tipo = "recta" if len(segmento) == 1 else "quebrada"
-            sentido = clasificar_sentido(segmento[0]["ANGULO"])
-
-            N_ini,E_ini = coords[p_ini]
-            N_fin,E_fin = coords[p_fin]
-
-            if primera:
-                salida += (
-                    f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                    f"en línea {tipo} en sentido {sentido}, "
-                    f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                )
-            else:
-                salida += (
-                    f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                    f"en línea {tipo} en sentido {sentido}, "
-                    f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                )
-
-        # ✅ COLINDANTE FINAL
         fila = b[-1]
 
         salida += f"; colindando con {fila['COL']}"
