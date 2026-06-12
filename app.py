@@ -208,9 +208,13 @@ if puntos_file and lineas_file:
                 delta = 360 - delta
 
             dist_acum = sum(x["DIST_TAB"] for x in segmento)
+# ✅ REGLA IGAC AJUSTADA (EVITA SOBRE-FRAGMENTACIÓN)
 
-            # ✅ REGLA IGAC (CLAVE)
-            if (delta > 10 or dist_acum > 250 or len(segmento) >= 4):
+            cond_quiebre = delta > 15
+            cond_longitud = dist_acum > 300
+            cond_densidad = len(segmento) >= 5
+
+            if cond_longitud or cond_densidad or (cond_quiebre and dist_acum > 120):
 
                 p_ini = segmento[0]["INI"]
                 p_fin = segmento[-1]["FIN"]
