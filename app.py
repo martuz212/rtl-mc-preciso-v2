@@ -165,6 +165,55 @@ if puntos_file and lineas_file:
             actual = [t]
 
     bloques.append(actual)
+# =====================================================
+# ✅ VALIDADOR PRO POR LINDERO
+# =====================================================
+
+val_linderos = []
+
+for i, b in enumerate(bloques):
+
+    dist_calc_sum = sum(x["DIST_CALC"] for x in b)
+    dist_tab_sum = sum(x["DIST_TAB"] for x in b)
+
+    diff = dist_calc_sum - dist_tab_sum
+
+    # evitar división por cero
+    if dist_calc_sum != 0:
+        error_pct = (diff / dist_calc_sum) * 100
+    else:
+        error_pct = 0
+
+    val_linderos.append({
+        "LINDERO": i + 1,
+        "DIST_CALC (m)": round(dist_calc_sum, 2),
+        "DIST_RTL (m)": round(dist_tab_sum, 2),
+        "DIF (m)": round(diff, 2),
+        "% ERROR": round(error_pct, 2),
+        "ESTADO": "✅ OK" if abs(diff) <= 0.1 else "❌ ERROR"
+    })
+
+df_val = pd.DataFrame(val_linderos)
+
+# =====================================================
+# ✅ RESULTADO GLOBAL
+# =====================================================
+
+errores = df_val[df_val["ESTADO"] == "❌ ERROR"]
+
+if len(errores) > 0:
+    estado_global = "❌ RTL NO VIABLE"
+else:
+    estado_global = "✅ RTL APROBADO"
+
+# =====================================================
+# ✅ VISUALIZACIÓN
+# =====================================================
+
+st.subheader("🧠 Validación por Linderos (MC PRECISO)")
+st.dataframe(df_val)
+
+st.markdown(f"### Resultado global: {estado_global}")
 
     # =====================================================
     # TABLAS
