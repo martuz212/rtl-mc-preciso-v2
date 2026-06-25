@@ -196,25 +196,12 @@ if puntos_file and lineas_file:
 
         salida += f"Lindero {contador_lindero}:\n"
 
+
         segmento = [b[0]]
         primera = True
 
         for t in b[1:]:
-
-            prev = segmento[-1]
-
-            delta = abs(t["ANGULO"] - prev["ANGULO"])
-            if delta > 180:
-                delta = 360 - delta
-
-            dist_acum = sum(x["DIST_TAB"] for x in segmento)
-# ✅ REGLA IGAC AJUSTADA (EVITA SOBRE-FRAGMENTACIÓN)
-
-            cond_quiebre = delta > 15
-            cond_longitud = dist_acum > 300
-            cond_densidad = len(segmento) >= 5
-
-            if cond_longitud or cond_densidad or (cond_quiebre and dist_acum > 120):
+            if clasificar_sentido(t["ANGULO"]) != clasificar_sentido(segmento[-1]["ANGULO"]):
 
                 p_ini = segmento[0]["INI"]
                 p_fin = segmento[-1]["FIN"]
@@ -224,110 +211,66 @@ if puntos_file and lineas_file:
 
                 if i2 > i1:
                     inter = orden[i1+1:i2]
-                    ruta = orden[i1:i2]
                 else:
                     inter = orden[i1+1:] + orden[:i2]
-                    ruta = orden[i1:] + orden[:i2]
 
-                texto_int = ""
-
-                if len(inter) == 1:
-                    p = inter[0]
-                    N,E = coords[p]
-                    texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-                elif len(inter) > 1:
-                    texto_int = "pasando por los puntos de coordenadas "
-                    for p in inter:
-                        N,E = coords[p]
-                        texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-                dist = round(sum(x["DIST_TAB"] for x in segmento), 1)
-                dist_txt = str(dist).replace(".", ",")
-
-                tipo = "recta" if len(segmento) == 1 else "quebrada"
-                sentido = clasificar_sentido(segmento[0]["ANGULO"])
-
-                N_ini,E_ini = coords[p_ini]
-                N_fin,E_fin = coords[p_fin]
-
-                if primera:
-                    salida += (
-                        f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
-                    primera = False
+                if len(inter)==0:
+                    texto_int=""
+                elif len(inter)==1:
+                    p=inter[0]; N,E=coords[p]
+                    texto_int=f"pasando por el punto {p} de coordenadas N= {f(N)} m, E= {f(E)} m, "
                 else:
-                    salida += (
-                        f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
+                    partes=[]
+                    for p in inter:
+                        N,E=coords[p]
+                        partes.append(f"punto {p} (N= {f(N)} m, E= {f(E)} m)")
+                    texto_int="pasando por los puntos " + "; ".join(partes)+", "
 
-                segmento = [t]
-
+                dist_txt=str(round(sum(x["DIST_TAB"] for x in segmento),1)).replace(".",",")
+                tipo="recta" if len(segmento)==1 else "quebrada"
+                sentido=clasificar_sentido(segmento[0]["ANGULO"])
+                N_ini,E_ini=coords[p_ini]
+                N_fin,E_fin=coords[p_fin]
+                inicio="Inicia" if primera else "Continúa"
+                salida += (
+                    f"{inicio} en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+                    f"en línea {tipo} en sentido {sentido}, "
+                    f"{texto_int}"
+                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
+                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
+                )
+                primera=False
+                segmento=[t]
             else:
                 segmento.append(t)
 
-        # ✅ ÚLTIMO SEGMENTO
         if segmento:
-
-            p_ini = segmento[0]["INI"]
-            p_fin = segmento[-1]["FIN"]
-
-            i1 = orden.index(p_ini)
-            i2 = orden.index(p_fin)
-
-            if i2 > i1:
-                inter = orden[i1+1:i2]
-                ruta = orden[i1:i2]
+            p_ini=segmento[0]["INI"]; p_fin=segmento[-1]["FIN"]
+            i1=orden.index(p_ini); i2=orden.index(p_fin)
+            inter=orden[i1+1:i2] if i2>i1 else orden[i1+1:]+orden[:i2]
+            if len(inter)==0:
+                texto_int=""
+            elif len(inter)==1:
+                p=inter[0]; N,E=coords[p]
+                texto_int=f"pasando por el punto {p} de coordenadas N= {f(N)} m, E= {f(E)} m, "
             else:
-                inter = orden[i1+1:] + orden[:i2]
-                ruta = orden[i1:] + orden[:i2]
-
-            texto_int = ""
-
-            if len(inter) == 1:
-                p = inter[0]
-                N,E = coords[p]
-                texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-            elif len(inter) > 1:
-                texto_int = "pasando por los puntos de coordenadas "
+                partes=[]
                 for p in inter:
-                    N,E = coords[p]
-                    texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-            dist = round(sum(x["DIST_TAB"] for x in segmento), 1)
-            dist_txt = str(dist).replace(".", ",")
-
-            tipo = "recta" if len(segmento) == 1 else "quebrada"
-            sentido = clasificar_sentido(segmento[0]["ANGULO"])
-
-            N_ini,E_ini = coords[p_ini]
-            N_fin,E_fin = coords[p_fin]
-
-            if primera:
-                salida += (
-                    f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                    f"en línea {tipo} en sentido {sentido}, "
-                    f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                )
-            else:
-                salida += (
-                    f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                    f"en línea {tipo} en sentido {sentido}, "
-                    f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                    f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                )
+                    N,E=coords[p]
+                    partes.append(f"punto {p} (N= {f(N)} m, E= {f(E)} m)")
+                texto_int="pasando por los puntos " + "; ".join(partes)+", "
+            dist_txt=str(round(sum(x["DIST_TAB"] for x in segmento),1)).replace(".",",")
+            tipo="recta" if len(segmento)==1 else "quebrada"
+            sentido=clasificar_sentido(segmento[0]["ANGULO"])
+            N_ini,E_ini=coords[p_ini]; N_fin,E_fin=coords[p_fin]
+            inicio="Inicia" if primera else "Continúa"
+            salida += (
+                f"{inicio} en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
+                f"en línea {tipo} en sentido {sentido}, "
+                f"{texto_int}"
+                f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
+                f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
+            )
 
         # ✅ COLINDANTE FINAL
         fila = b[-1]
