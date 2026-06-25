@@ -214,8 +214,8 @@ if puntos_file and lineas_file:
 
             cond_cambio_sentido = sentido_prev != sentido_act
 
-    # ✅ SOLO rompe cuando hay cambio REAL
-    if cond_quiebre_real or cond_cambio_sentido:
+            # ✅ SOLO rompe cuando hay cambio REAL
+            if cond_quiebre_real or cond_cambio_sentido:
 
                 p_ini = segmento[0]["INI"]
                 p_fin = segmento[-1]["FIN"]
