@@ -200,21 +200,22 @@ if puntos_file and lineas_file:
         primera = True
 
         for t in b[1:]:
-
             prev = segmento[-1]
 
             delta = abs(t["ANGULO"] - prev["ANGULO"])
             if delta > 180:
                 delta = 360 - delta
 
-            dist_acum = sum(x["DIST_TAB"] for x in segmento)
-# ✅ REGLA IGAC AJUSTADA (EVITA SOBRE-FRAGMENTACIÓN)
+            # ✅ NUEVA LÓGICA GEOMÉTRICA REAL (IGAC)
+            cond_quiebre_real = delta > 45
 
-            cond_quiebre = delta > 15
-            cond_longitud = dist_acum > 300
-            cond_densidad = len(segmento) >= 5
+            sentido_prev = clasificar_sentido(prev["ANGULO"])
+            sentido_act = clasificar_sentido(t["ANGULO"])
 
-            if cond_longitud or cond_densidad or (cond_quiebre and dist_acum > 120):
+            cond_cambio_sentido = sentido_prev != sentido_act
+
+    # ✅ SOLO rompe cuando hay cambio REAL
+    if cond_quiebre_real or cond_cambio_sentido:
 
                 p_ini = segmento[0]["INI"]
                 p_fin = segmento[-1]["FIN"]
