@@ -122,6 +122,8 @@ if puntos_file and lineas_file:
         sentido = clasificar_sentido(ang)
 
         dist_calc = round(math.sqrt((N2 - N1)**2 + (E2 - E1)**2), 1)
+        dist_tab = df_l.iloc[i]["LONGITUD"]
+        dif = round(abs(dist_calc - dist_tab), 1)
 
         tramos.append({
             "INI": p1,
@@ -129,6 +131,9 @@ if puntos_file and lineas_file:
             "ANGULO": ang,
             "SENTIDO": sentido,
             "DIST_CALC": dist_calc,
+            "DIST_TAB": dist_tab,
+            "DIF": dif,
+            "ESTADO": "✅ OK" if dif == 0 else "❌ ERROR",
             "CARD": df_l.iloc[i]["CARDINALDIAD"],
             "COL": df_l.iloc[i]["COL"],
             "COND": df_l.iloc[i]["OBSERVACIONES"],
@@ -139,8 +144,11 @@ if puntos_file and lineas_file:
 
     df_tramos = pd.DataFrame(tramos)
 
+    st.subheader("📐 Tramos técnicos")
+    st.dataframe(df_tramos)
+
     # =====================================================
-    # AGRUPACIÓN POR LINDEROS (SIN CAMBIO)
+    # BLOQUES POR LINDERO (SE MANTIENE)
     # =====================================================
 
     bloques = []
@@ -165,7 +173,7 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
-    # RTL FINAL (NUEVA LÓGICA POR SENTIDO)
+    # RTL FINAL (AJUSTADO SOLO POR SENTIDO)
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
@@ -185,17 +193,18 @@ if puntos_file and lineas_file:
         salida += f"Lindero {contador_lindero}:\n"
 
         segmentos = []
-        seg_actual = [b[0]]
+        segmento = [b[0]]
 
         for t in b[1:]:
+            prev = segmento[-1]
 
-            if t["SENTIDO"] == seg_actual[-1]["SENTIDO"]:
-                seg_actual.append(t)
+            if t["SENTIDO"] == prev["SENTIDO"]:
+                segmento.append(t)
             else:
-                segmentos.append(seg_actual)
-                seg_actual = [t]
+                segmentos.append(segmento)
+                segmento = [t]
 
-        segmentos.append(seg_actual)
+        segmentos.append(segmento)
 
         primera = True
 
@@ -239,7 +248,7 @@ if puntos_file and lineas_file:
                     f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
                     f"en línea {tipo} en sentido {sentido}, "
                     f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta el punto {p_fin} "
+                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
                     f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
                 )
                 primera = False
@@ -248,7 +257,7 @@ if puntos_file and lineas_file:
                     f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
                     f"en línea {tipo} en sentido {sentido}, "
                     f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta el punto {p_fin} "
+                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
                     f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
                 )
 
