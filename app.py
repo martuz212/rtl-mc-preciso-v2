@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import math
 import matplotlib.pyplot as plt
-import plotly.express as px  # <-- Nueva librería para el gráfico dinámico
+import plotly.express as px
 
 st.set_page_config(page_title="RTL–MC PRECISO PRO", layout="wide")
 st.title("🧭 RTL–MC PRECISO PRO")
+
 # =========================================================
 # FUNCIONES
 # =========================================================
@@ -118,19 +119,16 @@ if puntos_file and lineas_file:
         dy = N2 - N1
 
         ang = math.degrees(math.atan2(dx, dy)) % 360
+        sentido = clasificar_sentido(ang)
 
         dist_calc = round(math.sqrt((N2 - N1)**2 + (E2 - E1)**2), 1)
-        dist_tab = df_l.iloc[i]["LONGITUD"]
-        dif = round(abs(dist_calc - dist_tab), 1)
 
         tramos.append({
             "INI": p1,
             "FIN": p2,
             "ANGULO": ang,
+            "SENTIDO": sentido,
             "DIST_CALC": dist_calc,
-            "DIST_TAB": dist_tab,
-            "DIF": dif,
-            "ESTADO": "✅ OK" if dif == 0 else "❌ ERROR",
             "CARD": df_l.iloc[i]["CARDINALDIAD"],
             "COL": df_l.iloc[i]["COL"],
             "COND": df_l.iloc[i]["OBSERVACIONES"],
@@ -142,7 +140,7 @@ if puntos_file and lineas_file:
     df_tramos = pd.DataFrame(tramos)
 
     # =====================================================
-    # QUIEBRES
+    # AGRUPACIÓN POR LINDEROS (SIN CAMBIO)
     # =====================================================
 
     bloques = []
@@ -167,17 +165,7 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
-    # TABLAS
-    # =====================================================
-
-    st.subheader("📍 Coordenadas de puntos")
-    st.dataframe(df_p[["PUNTO", "NORTE", "ESTE"]])
-
-    st.subheader("📐 Tramos técnicos")
-    st.dataframe(df_tramos)
-
-    # =====================================================
-    # RTL FINAL (CONTINÚA IGAC REAL)
+    # RTL FINAL (NUEVA LÓGICA POR SENTIDO)
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
@@ -196,87 +184,22 @@ if puntos_file and lineas_file:
 
         salida += f"Lindero {contador_lindero}:\n"
 
-        segmento = [b[0]]
-        primera = True
+        segmentos = []
+        seg_actual = [b[0]]
 
         for t in b[1:]:
-            prev = segmento[-1]
 
-            delta = abs(t["ANGULO"] - prev["ANGULO"])
-            if delta > 180:
-                delta = 360 - delta
-
-            # ✅ NUEVA LÓGICA GEOMÉTRICA REAL (IGAC)
-            cond_quiebre_real = delta > 45
-
-            sentido_prev = clasificar_sentido(prev["ANGULO"])
-            sentido_act = clasificar_sentido(t["ANGULO"])
-
-            cond_cambio_sentido = sentido_prev != sentido_act
-
-            # ✅ SOLO rompe cuando hay cambio REAL
-            if cond_quiebre_real or cond_cambio_sentido:
-
-                p_ini = segmento[0]["INI"]
-                p_fin = segmento[-1]["FIN"]
-
-                i1 = orden.index(p_ini)
-                i2 = orden.index(p_fin)
-
-                if i2 > i1:
-                    inter = orden[i1+1:i2]
-                    ruta = orden[i1:i2]
-                else:
-                    inter = orden[i1+1:] + orden[:i2]
-                    ruta = orden[i1:] + orden[:i2]
-
-                texto_int = ""
-
-                if len(inter) == 1:
-                    p = inter[0]
-                    N,E = coords[p]
-                    texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-                elif len(inter) > 1:
-                    texto_int = "pasando por los puntos de coordenadas "
-                    for p in inter:
-                        N,E = coords[p]
-                        texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
-
-                dist = round(sum(x["DIST_TAB"] for x in segmento), 1)
-                dist_txt = str(dist).replace(".", ",")
-
-                tipo = "recta" if len(segmento) == 1 else "quebrada"
-                sentido = clasificar_sentido(segmento[0]["ANGULO"])
-
-                N_ini,E_ini = coords[p_ini]
-                N_fin,E_fin = coords[p_fin]
-
-                if primera:
-                    salida += (
-                        f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
-                    primera = False
-                else:
-                    salida += (
-                        f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
-                        f"en línea {tipo} en sentido {sentido}, "
-                        f"{texto_int}"
-                        f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
-                        f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
-                    )
-
-                segmento = [t]
-
+            if t["SENTIDO"] == seg_actual[-1]["SENTIDO"]:
+                seg_actual.append(t)
             else:
-                segmento.append(t)
+                segmentos.append(seg_actual)
+                seg_actual = [t]
 
-        # ✅ ÚLTIMO SEGMENTO
-        if segmento:
+        segmentos.append(seg_actual)
+
+        primera = True
+
+        for segmento in segmentos:
 
             p_ini = segmento[0]["INI"]
             p_fin = segmento[-1]["FIN"]
@@ -286,29 +209,27 @@ if puntos_file and lineas_file:
 
             if i2 > i1:
                 inter = orden[i1+1:i2]
-                ruta = orden[i1:i2]
             else:
                 inter = orden[i1+1:] + orden[:i2]
-                ruta = orden[i1:] + orden[:i2]
 
             texto_int = ""
 
             if len(inter) == 1:
                 p = inter[0]
                 N,E = coords[p]
-                texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
+                texto_int = f"pasando por el punto {p} N= {f(N)} m, E= {f(E)} m, "
 
             elif len(inter) > 1:
-                texto_int = "pasando por los puntos de coordenadas "
+                texto_int = "pasando por los puntos "
                 for p in inter:
                     N,E = coords[p]
-                    texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+                    texto_int += f"{p} N= {f(N)} m, E= {f(E)} m, "
 
-            dist = round(sum(x["DIST_TAB"] for x in segmento), 1)
+            dist = round(sum(x["DIST_CALC"] for x in segmento), 1)
             dist_txt = str(dist).replace(".", ",")
 
             tipo = "recta" if len(segmento) == 1 else "quebrada"
-            sentido = clasificar_sentido(segmento[0]["ANGULO"])
+            sentido = segmento[0]["SENTIDO"]
 
             N_ini,E_ini = coords[p_ini]
             N_fin,E_fin = coords[p_fin]
@@ -318,27 +239,27 @@ if puntos_file and lineas_file:
                     f"Inicia en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
                     f"en línea {tipo} en sentido {sentido}, "
                     f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
+                    f"en una distancia de {dist_txt} m, hasta el punto {p_fin} "
                     f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
                 )
+                primera = False
             else:
                 salida += (
                     f"Continúa en el punto {p_ini} con coordenadas planas N= {f(N_ini)} m, E= {f(E_ini)} m, "
                     f"en línea {tipo} en sentido {sentido}, "
                     f"{texto_int}"
-                    f"en una distancia de {dist_txt} m, hasta encontrar el punto {p_fin} "
+                    f"en una distancia de {dist_txt} m, hasta el punto {p_fin} "
                     f"con coordenadas planas N= {f(N_fin)} m, E= {f(E_fin)} m.\n"
                 )
 
-        # ✅ COLINDANTE FINAL
         fila = b[-1]
 
         salida += f"; colindando con {fila['COL']}"
 
         if str(fila["COND"]).upper() == "TRASLAPA":
-            salida += f", que traslapa con el Numero Predial nacional {fila['NPN']}"
+            salida += f", que traslapa con el Número Predial Nacional {fila['NPN']}"
         elif str(fila["COND"]).upper() == "CORRESPONDE":
-            salida += f", que corresponde con el Numero Predial nacional {fila['NPN']}"
+            salida += f", que corresponde con el Número Predial Nacional {fila['NPN']}"
 
         salida += f", Folio de matrícula inmobiliaria {fila['FMI']}"
         salida += f" y catastralmente a nombre de {fila['TIT']}.\n\n"
