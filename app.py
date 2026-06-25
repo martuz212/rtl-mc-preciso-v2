@@ -20,25 +20,39 @@ def cargar_archivo(file):
 def f(v):
     return f"{v:.2f}".replace(".", ",")
 
-def clasificar_sentido(ang):
-    if ang < 22.5:
+# ✅ NUEVA FUNCIÓN DE SENTIDO (CON TOLERANCIA 2%)
+def clasificar_sentido(dx, dy):
+
+    dx_abs = abs(dx)
+    dy_abs = abs(dy)
+
+    total = dx_abs + dy_abs
+
+    if total == 0:
         return "norte"
-    elif ang < 67.5:
+
+    px = dx_abs / total
+    py = dy_abs / total
+
+    tol = 0.02  # 2%
+
+    # ✅ NORTE / SUR
+    if px <= tol:
+        return "norte" if dy > 0 else "sur"
+
+    # ✅ ESTE / OESTE
+    if py <= tol:
+        return "este" if dx > 0 else "oeste"
+
+    # ✅ DIAGONALES
+    if dx > 0 and dy > 0:
         return "noreste"
-    elif ang < 112.5:
-        return "este"
-    elif ang < 157.5:
+    elif dx > 0 and dy < 0:
         return "sureste"
-    elif ang < 202.5:
-        return "sur"
-    elif ang < 247.5:
+    elif dx < 0 and dy < 0:
         return "suroeste"
-    elif ang < 292.5:
-        return "oeste"
-    elif ang < 337.5:
-        return "noroeste"
     else:
-        return "norte"
+        return "noroeste"
 
 # =========================================================
 # CARGA
@@ -119,7 +133,9 @@ if puntos_file and lineas_file:
         dy = N2 - N1
 
         ang = math.degrees(math.atan2(dx, dy)) % 360
-        sentido = clasificar_sentido(ang)
+
+        # ✅ CAMBIO CLAVE AQUÍ
+        sentido = clasificar_sentido(dx, dy)
 
         dist_calc = round(math.sqrt((N2 - N1)**2 + (E2 - E1)**2), 1)
         dist_tab = df_l.iloc[i]["LONGITUD"]
@@ -148,7 +164,7 @@ if puntos_file and lineas_file:
     st.dataframe(df_tramos)
 
     # =====================================================
-    # BLOQUES POR LINDERO (SE MANTIENE)
+    # BLOQUES POR LINDERO (SIN CAMBIOS)
     # =====================================================
 
     bloques = []
@@ -173,7 +189,7 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
-    # RTL FINAL (AJUSTADO SOLO POR SENTIDO)
+    # RTL FINAL (SIN CAMBIOS)
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
