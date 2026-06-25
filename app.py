@@ -20,7 +20,7 @@ def cargar_archivo(file):
 def f(v):
     return f"{v:.2f}".replace(".", ",")
 
-# ✅ NUEVA FUNCIÓN DE SENTIDO (CON TOLERANCIA 2%)
+# ✅ SENTIDO CON TOLERANCIA 2%
 def clasificar_sentido(dx, dy):
 
     dx_abs = abs(dx)
@@ -34,17 +34,14 @@ def clasificar_sentido(dx, dy):
     px = dx_abs / total
     py = dy_abs / total
 
-    tol = 0.02  # 2%
+    tol = 0.02
 
-    # ✅ NORTE / SUR
     if px <= tol:
         return "norte" if dy > 0 else "sur"
 
-    # ✅ ESTE / OESTE
     if py <= tol:
         return "este" if dx > 0 else "oeste"
 
-    # ✅ DIAGONALES
     if dx > 0 and dy > 0:
         return "noreste"
     elif dx > 0 and dy < 0:
@@ -133,8 +130,6 @@ if puntos_file and lineas_file:
         dy = N2 - N1
 
         ang = math.degrees(math.atan2(dx, dy)) % 360
-
-        # ✅ CAMBIO CLAVE AQUÍ
         sentido = clasificar_sentido(dx, dy)
 
         dist_calc = round(math.sqrt((N2 - N1)**2 + (E2 - E1)**2), 1)
@@ -164,7 +159,7 @@ if puntos_file and lineas_file:
     st.dataframe(df_tramos)
 
     # =====================================================
-    # BLOQUES POR LINDERO (SIN CAMBIOS)
+    # BLOQUES
     # =====================================================
 
     bloques = []
@@ -189,7 +184,7 @@ if puntos_file and lineas_file:
     bloques.append(actual)
 
     # =====================================================
-    # RTL FINAL (SIN CAMBIOS)
+    # RTL FINAL
     # =====================================================
 
     salida = "LINDEROS TÉCNICOS\n\n"
@@ -239,16 +234,19 @@ if puntos_file and lineas_file:
 
             texto_int = ""
 
+            # ✅ REDACCIÓN CORRECTA
             if len(inter) == 1:
                 p = inter[0]
                 N,E = coords[p]
-                texto_int = f"pasando por el punto {p} N= {f(N)} m, E= {f(E)} m, "
+                texto_int = f"pasando por el punto de coordenadas punto {p} N= {f(N)} m, E= {f(E)} m, "
 
             elif len(inter) > 1:
-                texto_int = "pasando por los puntos "
+                texto_int = "pasando por los puntos de coordenadas "
                 for p in inter:
                     N,E = coords[p]
-                    texto_int += f"{p} N= {f(N)} m, E= {f(E)} m, "
+                    texto_int += f"punto {p} N= {f(N)} m, E= {f(E)} m, "
+
+            texto_int = texto_int.rstrip(", ") + ", " if texto_int else ""
 
             dist = round(sum(x["DIST_CALC"] for x in segmento), 1)
             dist_txt = str(dist).replace(".", ",")
